@@ -1,69 +1,51 @@
 # keepgoing — task queue for Cursor agent
 
-Goal of the product: any Mac user closes the lid and their Claude Code / Codex
-agents keep running, reachable from the phone via each tool's remote control.
-KeepGoing = menu bar app + launchd daemon that keeps the Mac awake, keeps Wi-Fi
-up, and (new) overrides lid-closed sleep while agents are alive.
-
-Read `README.md` first. Layout:
+Phase 1 (lid mode) is DONE and committed. This is **Phase 2: publish v0.1.0**.
+Read `README.md` first. Layout unchanged:
 
 ```
-main.go                 CLI: daemon | install | uninstall | status | hotspot | lid | run | proxy | env
-internal/procwatch      detects claude / codex / codex app-server / cursor processes
-internal/awake          caffeinate assertion
-internal/wifi           bounce radio, force-join hotspot (Keychain password)
-internal/lid            NEW: pmset disablesleep via a two-command sudoers rule
-internal/proxy, tunnel  optional holding proxy (token safety)
-internal/runner, agents optional `run` wrapper
-app/main.swift          AppKit menu bar UI (talks to daemon over http://127.0.0.1:7777/_status)
-app/build.sh            builds dist/KeepGoing.app (Go daemon bundled as Contents/MacOS/keepgoing-cli)
+main.go                 CLI (daemon | install | uninstall | status | hotspot | lid | run | proxy | env)
+internal/*              Go packages
+app/main.swift          AppKit menu bar UI
+app/Info.plist, app/build.sh   → dist/KeepGoing.app (Go daemon bundled as Contents/MacOS/keepgoing-cli)
 ```
 
-## Hard rules
+## Hard rules (unchanged + additions)
 
-- Go 1.21 + macOS 26: build with `go build -ldflags=-linkmode=external` and `codesign -s - -f` (internal linker omits LC_UUID; unsigned arm64 gets SIGKILL). `app/build.sh` already does this.
-- The Go binary inside the .app MUST stay named `keepgoing-cli` (APFS is case-insensitive; `keepgoing` collides with the `KeepGoing` Swift executable).
-- Do NOT run `sudo`, `pmset`, `visudo`, or write to `/etc` yourself. Elijah runs `keepgoing lid enable` and types the password. Your job is the code path.
-- Do NOT bounce Wi-Fi while testing (`-wifi-dry-run` or `-no-wifi` on any foreground daemon you start). Use a separate port (`-listen 127.0.0.1:7790 -connect 127.0.0.1:7791`) so you don't collide with the live launchd daemon on 7777/7778.
-- Verify each step with `go vet ./... && ./app/build.sh` and, where relevant, `keepgoing status` (JSON).
-- Deploy = `rm -rf ~/Applications/KeepGoing.app && cp -R dist/KeepGoing.app ~/Applications/ && launchctl kickstart -k gui/$(id -u)/com.elijah.keepgoing && open ~/Applications/KeepGoing.app`. The launchd plist points at the bundled `keepgoing-cli`; `~/.local/bin/keepgoing` symlinks to it.
-- Commit after each numbered task (repo is not git yet — task 0 fixes that). Conventional Commits, subject ≤ 50 chars.
+- Build: `./app/build.sh`. Go binary in the bundle stays `keepgoing-cli`. Go 1.21 needs `-ldflags=-linkmode=external` + `codesign -s -` (build.sh does it).
+- Never run `sudo`, `pmset`, `visudo`, write to `/etc`, or bounce Wi-Fi. Test daemons on `-listen 127.0.0.1:7790 -connect 127.0.0.1:7791 -no-wifi`.
+- Deploy to this Mac = `rm -rf ~/Applications/KeepGoing.app && cp -R dist/KeepGoing.app ~/Applications/ && launchctl kickstart -k gui/$(id -u)/com.elijah.keepgoing && open ~/Applications/KeepGoing.app`.
+- GitHub: `gh` is logged in as `bigbrainw`. Create the repo **private** (`gh repo create bigbrainw/keepgoing --private --source . --push`). Elijah flips it public. Releases as **draft**.
+- No Apple Developer ID signing / notarisation in this phase (no cert yet). Ad-hoc only. Leave TODO hooks in the release script (`SIGN_IDENTITY`, `NOTARY_PROFILE` env vars: if set, use them; else ad-hoc).
+- Commit after each task. Conventional Commits, subject ≤ 50 chars.
 
 ## Tasks (in order)
 
-### 0. git init
-`git init`, commit current tree as `feat: keepgoing daemon, menu bar app, holding proxy`. `.gitignore` already excludes `keepgoing`, `dist/`, `*.log`.
+### 1. App icon
+Generate `app/icon.iconset` → `app/AppIcon.icns` with a script (`app/make-icon.sh`) that draws a simple bolt on a rounded dark square using Swift + CoreGraphics or `sips`/`iconutil` from a 1024px PNG you render (no external tools, no downloads). Add `CFBundleIconFile` = `AppIcon` to `Info.plist`; build.sh copies the icns into `Contents/Resources/`. Verify: `open dist/KeepGoing.app` shows the icon in Finder Get Info.
 
-### 1. Finish wiring lid mode (build is currently BROKEN — half-edited)
-Already done: `internal/lid/lid.go`, `LidMode` in `internal/config`, daemon integration in `main.go` (`lidOK`, `setLid`, status fields `lid_mode` / `lid_ready` / `sleep_disabled`), and `cmdLid()` at the bottom of `main.go`.
-Missing in `main.go`:
-- import `"github.com/elijah/keepgoing/internal/lid"`
-- `case "lid": os.Exit(cmdLid(fs.Args(), saved))` in the subcommand switch (next to `hotspot`)
-- usage line: `keepgoing lid enable|disable|status   keep running with the lid closed (one-time admin password)`
-Then `gofmt -w . && go vet ./... && go run . lid status` → prints `lid_mode=false sudoers_ready=false sleep_disabled_now=false`.
+### 2. Version plumbing
+Single source of truth `VERSION` file (`0.1.0`). `build.sh` injects it into `Info.plist` (`CFBundleShortVersionString`, `CFBundleVersion`) and into Go via `-ldflags "-X main.version=..."`; add `keepgoing version` and put `"version"` into `/_status`. Menu shows `KeepGoing v0.1.0` as a disabled first item.
 
-### 2. Daemon reconcile + uninstall safety
-- On daemon start, if `lidOK` and no agents → `lid.Set(false)` so a crash never leaves the Mac stuck in disablesleep.
-- `keepgoing uninstall` → `lid.Set(false)` best-effort before bootout; print the `sudo rm /etc/sudoers.d/keepgoing` hint.
+### 3. First-run onboarding (app/main.swift)
+On first launch (no `~/.config/keepgoing/onboarded` marker): one NSAlert, 3 short paragraphs: what it does, "Keep running with lid closed" (one-time admin prompt), "Set hotspot". Buttons: **Set up lid mode** (runs the existing toggleLid flow), **Later**. Write the marker either way. Keep it to one alert — no wizard.
 
-### 3. Menu bar: "Keep running with lid closed" toggle (app/main.swift)
-- New checkbox item under "Always keep awake". State from `/_status.lid_mode`.
-- Status line: `Lid: safe to close` when `lid_ready && sleep_disabled`, `Lid: will sleep` otherwise; `Lid: setup needed` when `lid_mode && !lid_ready`.
-- Enabling when `lid_ready == false`: show an NSAlert explaining the one-time admin prompt and the two exact commands the rule allows, then run the install script with elevation via `NSAppleScript` `do shell script <script> with administrator privileges`. Get the script text from the CLI so there is one source of truth: add `keepgoing lid install-script` (prints `lid.InstallScript`) and call it via the bundled `keepgoing-cli`. After success write `lid_mode: true` to `~/.config/keepgoing/config.json` (same pattern as `toggleAlways`) and `kickDaemon`.
-- Disabling: write `lid_mode: false`, run `keepgoing-cli lid disable`.
-- Add a one-line warning in the alert: closed laptop under load gets warm — surface, not bag; prefer plugged in.
+### 4. Release script `scripts/release.sh`
+- Reads `VERSION`, runs `app/build.sh`, produces `dist/KeepGoing-<ver>.zip` (via `ditto -c -k --keepParent`) and `dist/KeepGoing-<ver>.dmg` (via `hdiutil create -volname KeepGoing -srcfolder <staging with app + Applications symlink> -ov -format UDZO`).
+- If `SIGN_IDENTITY` is set: `codesign --deep --force --options runtime --timestamp -s "$SIGN_IDENTITY"`; if `NOTARY_PROFILE` set: `xcrun notarytool submit --keychain-profile "$NOTARY_PROFILE" --wait` + `xcrun stapler staple`. Else ad-hoc and print a warning.
+- Prints SHA256 of both artifacts.
 
-### 4. README
-Section "Close the lid": what happens, the sudoers rule verbatim, how to remove it, the heat/battery caveat, and that lid mode auto-releases 5 min after the last agent exits.
+### 5. Install docs for unsigned build
+README "Install" section at the top: download zip → unzip → drag to Applications → because it is not yet notarised: `xattr -d com.apple.quarantine /Applications/KeepGoing.app` (or right-click → Open). Also `keepgoing uninstall` + `sudo rm /etc/sudoers.d/keepgoing` for full removal. Add `LICENSE` (MIT, © 2026 Elijah).
 
-### 5. Build + deploy + smoke
-`./app/build.sh`, deploy per the rule above, `keepgoing status` shows `lid_mode`, `lid_ready`, `sleep_disabled` keys. Menu shows the new items. Leave `keepgoing lid enable` for Elijah to run.
+### 6. Repo + draft release
+`gh repo create bigbrainw/keepgoing --private --source . --push`. Tag `v0.1.0`. `gh release create v0.1.0 --draft --title "KeepGoing 0.1.0" --notes-file <generated from README top>` uploading the zip + dmg. Print the release URL.
 
-### 6. (after Elijah enables) Log check
-`tail ~/Library/Logs/keepgoing/daemon.log` should show `[lid] lid-closed sleep disabled while agents run`; `pmset -g | grep SleepDisabled` → 1 while agents run.
+### 7. Deploy to this Mac + smoke
+Deploy per rule. `keepgoing status` shows `version`. Report: repo URL, draft release URL, artifact SHA256s, anything that failed.
 
 ## Backlog (do not start unless told)
+- Sparkle auto-update; homebrew cask in a `bigbrainw/homebrew-tap`.
 - Push notify (ntfy.sh) when offline > 3 min or hotspot join fails.
-- Signed + notarised .app / dmg (currently ad-hoc signed).
-- Cursor CLI proxy adapter; Linux support (`systemd-inhibit`, `nmcli`).
-- brew formula.
+- Landing page (one static HTML) with the two GIFs: lid close + phone.
+- Linux support.
