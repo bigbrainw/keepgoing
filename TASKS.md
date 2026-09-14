@@ -122,3 +122,16 @@ Reviewed at 1280 px. Copy is right (180 words). Visuals aren't there yet.
 - Hero: add a 12 px line under the buttons: `macOS 13+ · free, MIT · 3 MB`.
 
 ### J. Deploy, commit, push (no history rewrite), report deviations.
+
+## Phase 5.2 — last nits (small, do all, one commit is fine)
+
+Reviewed live at 1280 px after the click: this is now a real demo. Three fixes:
+
+### K. Demo proportions
+Phone is taller than the laptop and overlaps the hinge. Desktop: phone 150×300, laptop 320 wide, 32 px gap, both bottom-aligned; nothing overlaps. Closed lid at `rotateX(-82deg)` so a sliver of the lid top stays visible (at -88° it reads as a line). Mobile (≤ 640 px): phone above laptop, centred, phone 140×280.
+
+### L. Menu mock checkmark row
+`✓ Keep awake with lid closed` — the text is pushed to the right edge. Use a fixed 18 px check column on every action row (empty on unchecked rows) so all labels share one left edge, like a real NSMenu.
+
+### M. Verify at 390 px for real
+Open the deployed page in Safari/Chrome at 390 px wide (responsive mode) and confirm: no horizontal scroll, demo stacks, hero menu mock scales (max-width 100%). Fix anything found. Then deploy, commit, push, report.
