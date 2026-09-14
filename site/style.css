@@ -124,11 +124,10 @@ h1 {
 }
 .md.mi-off { color: var(--mac-row); }
 .md.mi-amber { color: var(--accent); }
-.md.mi-check::before {
-  content: "";
-  display: inline-block; width: 10px; height: 10px; margin-right: 6px;
-  background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23f5c842' d='M4.5 9 1 5.5l1.2-1.2L4.5 6.6l5.3-5.3L11 2.5z'/%3E%3C/svg%3E");
+.md.mi-check {
+  display: flex; align-items: center; gap: 6px;
 }
+.mi-tick { color: var(--accent); flex-shrink: 0; }
 .md-key { margin-left: auto; padding-left: 16px; color: var(--mac-row); font-size: 12px; }
 .md-sep {
   height: 1px; background: rgba(255,255,255,.14);
