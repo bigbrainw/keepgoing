@@ -96,3 +96,29 @@ The app is running. Try `screencapture -x -R <region> site/img/menu.png` after o
 ### D. Favicon (inline SVG bolt), `theme-color` both schemes, OG/Twitter meta with `site/img/og.png` (1200×630) rendered by a small Swift or `sips` script in `site/make-og.sh` from the hero text — no external services.
 
 ### E. Deploy, then screenshot the deployed page at 390 and 1280 (`npx playwright` is NOT allowed — use `screencapture` of a browser window or skip). Report: URL, word count, which images are real vs CSS, anything you deviated from.
+
+## Phase 5.1 — visual fixes from review (do now, in order)
+
+Reviewed at 1280 px. Copy is right (180 words). Visuals aren't there yet.
+
+### F. Demo: the lid must actually close
+- Build each laptop as HTML: `.laptop > .lid + .base`. `.lid` has `transform-origin: bottom center`; parent has `perspective: 900px`. Open = `rotateX(0)`, closed = `rotateX(-88deg)` with `transition: transform 700ms cubic-bezier(.4,0,.2,1)`. The lid folds down onto the base — a viewer must see it shut.
+- Draw a MacBook, not two grey rectangles: lid = dark rounded rect with 6 px bezel and a small notch; base = light grey slab with a keyboard hint (a faint 2-row dotted pattern) and trackpad outline. ~260 px wide.
+- Right laptop, closed state: 2 px amber glow line along the hinge + a floating ⚡ badge (inline SVG bolt, 20 px, amber circle) above the closed lid with a soft 1.2 s pulse. Left: nothing, slab goes flat grey.
+- Sequence after click: lids close (0–700 ms) → both phones show "…" typing (900 ms) → left: "No reply" grey bubble + caption *macOS sleeps in 67 s.* (2400 ms); right: "Done — 3 tests fixed" green bubble + ⚡ badge + caption *Still running.* (2400 ms). Reverse on "Open the lid". `prefers-reduced-motion`: jump to end states.
+
+### G. Demo: real phone frames
+- Each side: a phone (rounded 40 px, 1.5 px border, 170×340) standing to the left of the laptop on desktop, above it on mobile. Inside: a chat with the user bubble right-aligned (blue-ish `#2f6fed`, white text) and agent replies left-aligned (grey; the success reply green `#1f7a4d`/white). Bubbles `max-width: 78%`, padding 8 px 12 px, radius 16 px — iMessage proportions, never full-width bars.
+- Phone status bar: time "9:41" + a 3-bar signal glyph (SVG, currentColor). Remove the "Without KeepGoing / With KeepGoing" labels from above; put them as 12 px captions under each laptop instead.
+
+### H. Hero menu mock → looks like a real macOS dark menu
+- Top strip: 22 px, dark translucent (`#2b2b2b` @ 92%), right-aligned glyphs: our ⚡ (amber, with a highlighted 24 px rounded backdrop = "menu open"), then a wifi glyph, battery glyph, "Mon 14:42". Left: blank (no app name).
+- Dropdown: 260 px, `#1e1e1e`, 6 px radius, 13 px system font, rows 22 px, separators 1 px at 14% white with 4 px margins, disabled rows 55% white, checkmark ✓ as inline SVG. `Lid: safe to close` in amber. Include the full shipped menu through `Quit KeepGoing ⌘Q`. Drop shadow 0 8 px 24 px rgba(0,0,0,.45).
+- Same component reused for the "Rejoins Wi-Fi" card, showing `Network: offline — recovering` / `Hotspot: iPhone`, icon `wifi.slash`.
+
+### I. Small things
+- Install step 3: replace the ⚡ emoji with the inline SVG bolt (skill: no emoji icons).
+- "What it does" icon card: active icon amber, the other three `--muted`; label each under the icon in 11 px: `running` `lid will sleep` `idle` `offline`.
+- Hero: add a 12 px line under the buttons: `macOS 13+ · free, MIT · 3 MB`.
+
+### J. Deploy, commit, push (no history rewrite), report deviations.
