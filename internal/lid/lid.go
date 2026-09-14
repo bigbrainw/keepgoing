@@ -6,6 +6,7 @@ package lid
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -22,15 +23,19 @@ const Sudoers = `# keepgoing: let the daemon keep the Mac awake with the lid clo
 `
 
 // InstallScript is the shell run as root (via sudo or an admin prompt).
-// visudo -c validates before the file goes live.
+// The rule travels as base64 so it survives sh and AppleScript quoting
+// unchanged; visudo -c validates and grep proves the rule line is present
+// (a quoting slip would otherwise leave a file that is all comment and
+// "parses OK").
 var InstallScript = fmt.Sprintf(`set -e
 umask 077
 tmp=$(mktemp)
-printf '%%s' %q > "$tmp"
+echo %s | /usr/bin/base64 -d > "$tmp"
+grep -q '^%%admin ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0$' "$tmp"
 /usr/sbin/visudo -cf "$tmp" >/dev/null
 install -m 0440 -o root -g wheel "$tmp" %s
 rm -f "$tmp"
-echo installed %s`, Sudoers, SudoersPath, SudoersPath)
+echo installed %s`, base64.StdEncoding.EncodeToString([]byte(Sudoers)), SudoersPath, SudoersPath)
 
 // UninstallScript removes the rule and re-enables sleep.
 var UninstallScript = fmt.Sprintf(`rm -f %s; /usr/bin/pmset -a disablesleep 0; echo removed`, SudoersPath)
