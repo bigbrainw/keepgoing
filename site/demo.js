@@ -5,15 +5,34 @@
   if (!btn || !stage) return;
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var closed = false;
+  var timers = [];
+
+  function clearTimers() {
+    timers.forEach(clearTimeout);
+    timers = [];
+  }
+
+  function setClosed(next) {
+    closed = next;
+    clearTimers();
+    stage.classList.toggle('is-closed', closed);
+    stage.classList.remove('phase-typing', 'phase-done');
+    btn.textContent = closed ? 'Open the lid' : 'Close the lid';
+    if (!closed) return;
+    if (reduced) {
+      stage.classList.add('phase-typing', 'phase-done');
+      return;
+    }
+    timers.push(setTimeout(function () {
+      stage.classList.add('phase-typing');
+    }, 900));
+    timers.push(setTimeout(function () {
+      stage.classList.add('phase-done');
+    }, 2400));
+  }
 
   btn.addEventListener('click', function () {
-    closed = !closed;
-    stage.classList.toggle('is-closed', closed);
-    btn.textContent = closed ? 'Open the lid' : 'Close the lid';
-    if (!reduced) {
-      stage.classList.add('is-animating');
-      window.setTimeout(function () { stage.classList.remove('is-animating'); }, 600);
-    }
+    setClosed(!closed);
   });
 
   document.querySelectorAll('.cmd-wrap pre code').forEach(function (code) {
