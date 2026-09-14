@@ -160,5 +160,17 @@ SleepDisabled 1                    # still running, on battery</code></pre>
       · <a href="https://github.com/bigbrainw/keepgoing/issues">Report an issue</a>
     </div>
   </footer>
+  <script>
+    document.querySelectorAll('.cmd-wrap pre code').forEach(function (code) {
+      var w = code.closest('.cmd-wrap'), b = document.createElement('button');
+      b.className = 'copy-btn'; b.textContent = 'copy';
+      b.onclick = function () {
+        navigator.clipboard.writeText(code.textContent).then(function () {
+          b.textContent = 'copied'; setTimeout(function () { b.textContent = 'copy'; }, 1200);
+        });
+      };
+      w.appendChild(b);
+    });
+  </script>
 </body>
 </html>
