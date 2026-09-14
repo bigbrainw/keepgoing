@@ -3,174 +3,173 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KeepGoing — close the lid, your agent keeps going</title>
-  <meta name="description" content="A tiny macOS menu bar app that keeps your Mac awake and online while Claude Code, Codex, or Cursor run.">
-  <link rel="icon" href="data:,">
+  <title>Close the lid. Your agent keeps going.</title>
+  <meta name="description" content="KeepGoing keeps a Mac awake and online while Claude Code and Codex run — reachable from your phone with the laptop shut.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta property="og:title" content="Close the lid. Your agent keeps going.">
+  <meta property="og:description" content="KeepGoing keeps a Mac awake and online for Claude Code and Codex.">
+  <meta property="og:image" content="https://keepgoing-pi.vercel.app/img/og.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Close the lid. Your agent keeps going.">
+  <meta name="twitter:image" content="https://keepgoing-pi.vercel.app/img/og.png">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <nav class="site-nav">
-    <div class="wrap">
-      <a class="brand" href="#">⚡ KeepGoing</a>
-      <div class="nav-links">
-        <a href="#how">How it works</a>
-        <a href="#install">Install</a>
-        <a href="#faq">FAQ</a>
-        <a href="https://github.com/bigbrainw/keepgoing">GitHub</a>
-      </div>
-    </div>
-  </nav>
+  <a class="skip" href="#main">Skip</a>
 
-  <header class="hero">
-    <div class="wrap hero-grid">
-      <div>
-        <h1>Close the lid. Your agent keeps going.</h1>
-        <p class="lead">KeepGoing is a tiny macOS menu bar app that keeps your Mac awake and online while Claude Code, Codex, or Cursor run — so the remote control on your phone still works when the laptop is shut in your bag.</p>
-        <div class="btn-row">
-          <a class="btn btn-primary" href="https://github.com/bigbrainw/keepgoing/releases/latest">Download for macOS</a>
-          <a class="btn btn-secondary" href="https://github.com/bigbrainw/keepgoing">View on GitHub</a>
+  <main id="main">
+    <section class="hero">
+      <div class="wrap hero-inner">
+        <div class="hero-copy">
+          <h1>Don't wait for the prompt to finish. Close the lid.</h1>
+          <p class="lead">Your agent finishes the job while you travel. KeepGoing keeps a Mac awake and online for Claude Code and Codex — and reachable from your phone — with the laptop shut.</p>
+          <div class="btn-row">
+            <a class="btn btn-primary" href="https://github.com/bigbrainw/keepgoing/releases/latest">Download for macOS</a>
+            <a class="btn btn-secondary" href="https://github.com/bigbrainw/keepgoing">GitHub</a>
+          </div>
         </div>
-        <p class="fine-print">Apple Silicon &amp; Intel · macOS 13+ · free &amp; open source (MIT) · 3 MB</p>
-      </div>
-      <div class="menubar-mock" aria-hidden="true">
-        <div class="menubar-strip">
-          <span class="bolt">⚡</span>
-          <span>KeepGoing</span>
-        </div>
-        <div class="menubar-menu">
-          <div>Agents: claude×1</div>
-          <div>Sleep: blocked</div>
-          <div>Network: online</div>
-          <div class="highlight">Lid: safe to close</div>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <main>
-    <section id="why">
-      <div class="wrap">
-        <h2>Why</h2>
-        <ul class="bullets">
-          <li>You start a long agent run, close the lid, walk away. macOS sleeps. The run freezes.</li>
-          <li>Your phone's remote control goes quiet — the Mac it talks to is asleep.</li>
-          <li>Hop from office Wi-Fi to a hotspot and every in-flight request dies with it.</li>
-        </ul>
+        <figure class="shot hero-shot" aria-label="KeepGoing menu bar menu">
+          <div class="mac-bar"><span class="mac-bar-title">KeepGoing</span></div>
+          <div class="mac-menu">
+            <div class="mi dim">KeepGoing 0.1.0</div>
+            <div class="mi-sep"></div>
+            <div class="mi">Agents: claude 13 · codex 4</div>
+            <div class="mi">Sleep: blocked</div>
+            <div class="mi hi">Lid: safe to close</div>
+            <div class="mi">Network: online</div>
+            <div class="mi">Hotspot: iPhone</div>
+            <div class="mi-sep"></div>
+            <div class="mi check">Keep awake with lid closed</div>
+            <div class="mi">Always keep awake</div>
+            <div class="mi">Set hotspot…</div>
+          </div>
+        </figure>
       </div>
     </section>
 
-    <section id="how">
+    <section class="demo-section" aria-labelledby="demo-label">
       <div class="wrap">
-        <h2>How it works</h2>
-        <div class="cards">
-          <article class="card">
-            <div class="card-num">1</div>
-            <h3>Sees your agents.</h3>
-            <p>Every 5 seconds it looks for <code>claude</code>, <code>codex</code> (including the app-server that ChatGPT / Codex desktop use), and <code>cursor-agent</code>.</p>
-          </article>
-          <article class="card">
-            <div class="card-num">2</div>
-            <h3>Keeps the Mac awake — lid open or closed.</h3>
-            <p>Holds a sleep assertion while an agent is alive. With lid mode on, closing the lid no longer sleeps the Mac. Releases 5 minutes after the last agent exits, so your battery is normal the rest of the time.</p>
-          </article>
-          <article class="card">
-            <div class="card-num">3</div>
-            <h3>Keeps you online.</h3>
-            <p>If the network is gone for 20 s it bounces the Wi-Fi radio; still gone, it joins your iPhone hotspot (password from Keychain). Optional holding proxy parks API calls while offline instead of failing them.</p>
-          </article>
+        <p class="demo-label" id="demo-label">Try it</p>
+        <div class="demo-stage" id="demo-stage">
+          <div class="demo-col">
+            <p class="demo-col-title">Without KeepGoing</p>
+            <div class="phone">
+              <div class="bubble out">Run the tests and fix what breaks</div>
+              <div class="bubble wait left-wait">…</div>
+              <div class="bubble bad left-bad">No reply</div>
+            </div>
+            <svg class="laptop" viewBox="0 0 220 150" aria-hidden="true">
+              <rect class="base" x="20" y="118" width="180" height="10" rx="3" fill="currentColor" opacity=".25"/>
+              <rect class="screen-bg" x="36" y="24" width="148" height="92" rx="4" fill="currentColor" opacity=".12"/>
+              <rect class="screen-left" x="38" y="26" width="144" height="88" rx="3" fill="#1a2332"/>
+              <g class="lid lid-left" transform-origin="110 26">
+                <rect x="34" y="18" width="152" height="10" rx="2" fill="currentColor" opacity=".35"/>
+              </g>
+            </svg>
+            <p class="demo-cap left-cap">macOS sleeps in 67 s.</p>
+          </div>
+          <div class="demo-col">
+            <p class="demo-col-title">With KeepGoing</p>
+            <div class="phone">
+              <div class="bubble out">Run the tests and fix what breaks</div>
+              <div class="bubble good right-good">Done — 3 tests fixed</div>
+            </div>
+            <svg class="laptop" viewBox="0 0 220 150" aria-hidden="true">
+              <rect class="base" x="20" y="118" width="180" height="10" rx="3" fill="currentColor" opacity=".25"/>
+              <rect class="screen-bg" x="36" y="24" width="148" height="92" rx="4" fill="currentColor" opacity=".12"/>
+              <rect class="screen-right" x="38" y="26" width="144" height="88" rx="3" fill="#1a2332"/>
+              <rect class="hinge-glow" x="100" y="22" width="20" height="3" rx="1" fill="var(--accent)"/>
+              <text class="menubar-bolt" x="44" y="38" font-size="10" fill="var(--accent)">⚡</text>
+              <g class="lid lid-right" transform-origin="110 26">
+                <rect x="34" y="18" width="152" height="10" rx="2" fill="currentColor" opacity=".35"/>
+              </g>
+            </svg>
+            <p class="demo-cap right-cap">Still running.</p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary demo-btn" id="lid-btn">Close the lid</button>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="wrap">
+        <h2>What it does</h2>
+        <div class="feat-row">
+          <figure class="shot feat-shot">
+            <div class="icon-row" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg>
+              <svg viewBox="0 0 24 24" width="28" height="28" opacity=".7"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg>
+              <svg viewBox="0 0 24 24" width="28" height="28" opacity=".55"><path fill="currentColor" d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
+              <svg viewBox="0 0 24 24" width="28" height="28" opacity=".55"><path fill="currentColor" d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 0 0-6 0zm-4-4l2 2a7.074 7.074 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+            </div>
+            <figcaption>Watches your agents.</figcaption>
+          </figure>
+          <figure class="shot feat-shot alert-shot">
+            <div class="fake-alert">
+              <p class="fake-alert-title">Allow KeepGoing to override lid-closed sleep?</p>
+              <div class="fake-alert-btns"><span>Install</span><span>Cancel</span></div>
+            </div>
+            <figcaption>Asks for your password once.</figcaption>
+          </figure>
+          <figure class="shot feat-shot">
+            <div class="mac-menu compact">
+              <div class="mi">Network: offline — recovering</div>
+              <div class="mi">Hotspot: iPhone</div>
+            </div>
+            <figcaption>Rejoins Wi-Fi or your hotspot.</figcaption>
+          </figure>
         </div>
       </div>
     </section>
 
-    <section id="proof">
+    <section class="install" id="install">
       <div class="wrap">
-        <h2>Tested on real hardware</h2>
-        <div class="cmd-wrap proof-block">
-          <pre><code>$ keepgoing lid status
-lid_mode=true  sudoers_ready=true  sleep_disabled_now=true
-
-$ ioreg -r -k AppleClamshellState -d 4 | grep State
-"AppleClamshellState" = Yes        # lid physically closed
-$ pmset -g | grep SleepDisabled
-SleepDisabled 1                    # still running, on battery</code></pre>
-        </div>
-        <p class="caption">MacBook Pro, macOS 26.3, lid closed on battery — replied to a phone message through Claude Code remote control. With lid mode off, the same test slept in 67 seconds.</p>
-      </div>
-    </section>
-
-    <section id="install">
-      <div class="wrap">
-        <h2>Install</h2>
-        <ol class="install-steps">
-          <li>Download <code>KeepGoing-&lt;version&gt;.dmg</code> from Releases, drag to Applications.</li>
+        <ol class="steps">
+          <li>Download, drag to Applications.</li>
           <li>
-            Not yet notarised — first launch:
+            <span class="step-note">Not notarised yet.</span>
             <div class="cmd-wrap">
               <pre><code>xattr -d com.apple.quarantine /Applications/KeepGoing.app</code></pre>
             </div>
-            (or right-click → Open).
           </li>
-          <li>Click ⚡ → <strong>Keep running with lid closed</strong> → enter your admin password once. Optional: <strong>Set hotspot…</strong>.</li>
+          <li>Click ⚡ → <strong>Keep awake with lid closed</strong>.</li>
         </ol>
-        <div class="note-box">
-          The one-time admin prompt installs a sudoers rule allowing exactly two commands: <code>pmset -a disablesleep 1</code> and <code>pmset -a disablesleep 0</code>. Nothing else. Remove with <code>sudo rm /etc/sudoers.d/keepgoing</code>.
-        </div>
-        <p class="cli-alt">keepgoing install · keepgoing status · keepgoing lid enable · keepgoing hotspot set "&lt;iPhone&gt;"</p>
       </div>
     </section>
 
-    <section id="faq">
+    <section class="proof">
       <div class="wrap">
-        <h2>FAQ</h2>
-        <div class="faq-list">
-          <details>
-            <summary>Will my laptop get hot in a bag?</summary>
-            <p>A closed laptop under agent load gets warm. Put it on a surface, prefer plugged in. Lid mode turns itself off 5 minutes after the last agent exits.</p>
-          </details>
-          <details>
-            <summary>Battery?</summary>
-            <p>Awake on battery ≈ 2–5 h depending on load. Plug in for travel.</p>
-          </details>
-          <details>
-            <summary>Does it need my API keys or read my code?</summary>
-            <p>No. It watches process names, power state, and network reachability. It never talks to Anthropic/OpenAI itself. The optional proxy is a plain passthrough on localhost.</p>
-          </details>
-          <details>
-            <summary>Why the admin password?</summary>
-            <p>macOS only lets root override lid-closed sleep. See the note above — the rule is two exact commands.</p>
-          </details>
-          <details>
-            <summary>What about Windows / Linux?</summary>
-            <p>macOS only today. Linux (systemd-inhibit + nmcli) is on the list.</p>
-          </details>
-          <details>
-            <summary>Does it launch agents for me?</summary>
-            <p>No. Start them however you already do; KeepGoing just keeps the machine and the network up.</p>
-          </details>
+        <div class="cmd-wrap proof-block">
+          <pre><code>$ ioreg -r -k AppleClamshellState -d 4 | grep State
+"AppleClamshellState" = Yes        # lid closed
+$ pmset -g | grep SleepDisabled
+SleepDisabled 1                    # still running, on battery</code></pre>
         </div>
+        <p class="caption">MacBook Pro, macOS 26, on battery, replied from a phone through Claude Code.</p>
+      </div>
+    </section>
+
+    <section class="faq" id="faq">
+      <div class="wrap">
+        <details><summary>Hot in a bag?</summary><p>Warm under load; keep it on a surface, plug in if you can.</p></details>
+        <details><summary>Battery?</summary><p>2–5 h awake; it re-enables sleep 5 min after agents stop.</p></details>
+        <details><summary>My keys / code?</summary><p>Never touched; it only watches process names, power, and network.</p></details>
+        <details><summary>Why a password?</summary><p>Only root can override lid sleep; the rule allows two pmset commands and nothing else.</p></details>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="foot">
     <div class="wrap">
       <a href="https://github.com/bigbrainw/keepgoing/blob/main/LICENSE">MIT</a>
-      · Built by Elijah
       · <a href="https://github.com/bigbrainw/keepgoing">GitHub</a>
-      · <a href="https://github.com/bigbrainw/keepgoing/issues">Report an issue</a>
+      · <a href="https://github.com/bigbrainw/keepgoing/issues">Issues</a>
+      · v0.1.0
     </div>
   </footer>
-  <script>
-    document.querySelectorAll('.cmd-wrap pre code').forEach(function (code) {
-      var w = code.closest('.cmd-wrap'), b = document.createElement('button');
-      b.className = 'copy-btn'; b.textContent = 'copy';
-      b.onclick = function () {
-        navigator.clipboard.writeText(code.textContent).then(function () {
-          b.textContent = 'copied'; setTimeout(function () { b.textContent = 'copy'; }, 1200);
-        });
-      };
-      w.appendChild(b);
-    });
-  </script>
 </body>
 </html>
