@@ -45,6 +45,7 @@ final class App: NSObject, NSApplicationDelegate {
         buildMenu()
         item.menu = menu
         ensureDaemon()
+        showOnboardingIfNeeded()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in self.refresh() }
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -168,6 +169,35 @@ final class App: NSObject, NSApplicationDelegate {
 
     func configPath() -> String {
         NSHomeDirectory() + "/.config/keepgoing/config.json"
+    }
+
+    func onboardedPath() -> String {
+        NSHomeDirectory() + "/.config/keepgoing/onboarded"
+    }
+
+    func markOnboarded() {
+        let path = onboardedPath()
+        try? FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: path, contents: Data("1\n".utf8), attributes: [.posixPermissions: 0o600])
+    }
+
+    func showOnboardingIfNeeded() {
+        guard !FileManager.default.fileExists(atPath: onboardedPath()) else { return }
+        let alert = NSAlert()
+        alert.messageText = "Welcome to KeepGoing"
+        alert.informativeText = """
+        KeepGoing keeps your Mac awake and online while Claude Code, Codex, or Cursor agents run — so remote control from your phone keeps working when you step away.
+
+        Enable “Keep running with lid closed” for a one-time admin setup that lets agents survive closing the laptop lid (while agents are running).
+
+        Set a hotspot fallback in the menu if you want KeepGoing to auto-join your phone’s hotspot when Wi-Fi drops.
+        """
+        alert.addButton(withTitle: "Set up lid mode")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+        let setup = alert.runModal() == .alertFirstButtonReturn
+        markOnboarded()
+        if setup { toggleLid() }
     }
 
     func loadConfig() -> [String: Any] {
