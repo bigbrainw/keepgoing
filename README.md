@@ -42,12 +42,33 @@ export API_TIMEOUT_MS=3600000
 export HTTPS_PROXY=http://127.0.0.1:7778 NO_PROXY=localhost,127.0.0.1,::1   # codex (wss hard-coded → CONNECT)
 ```
 
+## Close the lid
+
+By default, closing a MacBook lid puts it to sleep — agents stop and phone remote control drops. With **Keep running with lid closed** enabled (menu bar checkbox, or `keepgoing lid enable`), the daemon toggles `pmset disablesleep` together with the normal caffeinate assertion: while any agent is running, the Mac stays awake with the lid shut. Five minutes after the last agent exits, both the assertion and disablesleep are released so battery behaviour returns to normal.
+
+One-time setup installs a sudoers drop-in at `/etc/sudoers.d/keepgoing` (admin password required). The rule is verbatim:
+
+```
+# keepgoing: let the daemon keep the Mac awake with the lid closed.
+# Only these two exact commands, nothing else.
+%admin ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0
+```
+
+Nothing else is granted. To remove the rule after uninstalling or disabling lid mode:
+
+```
+sudo rm /etc/sudoers.d/keepgoing
+```
+
+**Heat and battery:** a closed laptop under agent load gets warm. Keep it on a hard surface, not in a bag, and prefer plugged in. On battery alone, macOS may still throttle; lid mode overrides clamshell sleep, not thermals.
+
 ## Commands
 
 ```
 keepgoing install / uninstall
 keepgoing status                       JSON: agents, awake, online, wifi, proxy stats
 keepgoing hotspot set <SSID>           password → Keychain (service keepgoing-hotspot)
+keepgoing lid enable|disable|status    keep running with the lid closed (one-time sudoers rule)
 keepgoing daemon [flags]               foreground; -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake
 keepgoing run [flags] -- <agent cmd>   optional wrapper: proxy + awake + resume-on-crash for one headless agent
 keepgoing env [-agent claude|codex]
@@ -67,7 +88,7 @@ Log: `~/Library/Logs/keepgoing/daemon.log`.
 
 ## Limits
 
-- **Lid closed on battery = sleep.** Not fixable from userspace. Plug in (clamshell), or `sudo pmset -a disablesleep 1` (laptop stays warm in a bag).
+- **Lid closed on battery without lid mode = sleep.** Enable lid mode (menu or `keepgoing lid enable`) to override clamshell sleep while agents run; it auto-releases 5 min after the last agent exits. Plugged in is still safer for heat.
 - **Hotspot join needs the phone's hotspot on.** macOS can't wake it. Set iPhone → Personal Hotspot → Allow Others to Join, and Mac → Wi-Fi → Ask to join hotspots → Automatically; keepgoing's forced join is the fallback.
 - `wifi_ssid` in status shows `<redacted>` on macOS 26 (system privacy), not a bug.
 - Codex hold is at CONNECT time only (TLS is opaque); a drop mid-turn relies on Codex's own reconnect.
