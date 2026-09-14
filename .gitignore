@@ -1,3 +1,7 @@
 keepgoing
 dist/
 *.log
+app/icon.iconset/
+app/icon-1024.png
+app/make-icon-bin
+app/make-icon.swift
