@@ -246,6 +246,10 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			log.Printf("[lid] lid-closed sleep re-enabled")
 		}
 	}
+	if lidOK {
+		// crash recovery: never leave disablesleep stuck on with no agents
+		setLid(false)
+	}
 
 	co.px.Extra = func() map[string]any {
 		m := map[string]any{
@@ -485,9 +489,11 @@ func cmdInstall() int {
 }
 
 func cmdUninstall() int {
+	_ = lid.Set(false)
 	_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), label)).Run()
 	_ = os.Remove(plistPath())
 	fmt.Println("uninstalled", label)
+	fmt.Println("to remove the lid sudoers rule: sudo rm " + lid.SudoersPath)
 	return 0
 }
 
