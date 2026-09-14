@@ -40,6 +40,8 @@ import (
 
 const label = "com.elijah.keepgoing"
 
+var version = "dev"
+
 type cfg struct {
 	listen      string
 	connect     string
@@ -100,6 +102,9 @@ func main() {
 		os.Exit(cmdUninstall())
 	case "status":
 		os.Exit(cmdStatus(base))
+	case "version":
+		fmt.Println(version)
+		os.Exit(0)
 	case "hotspot":
 		os.Exit(cmdHotspot(fs.Args(), saved))
 	case "lid":
@@ -139,6 +144,7 @@ func usage() {
   keepgoing install                 run at login via launchd (awake + wifi + proxy)
   keepgoing uninstall
   keepgoing status                  agents, awake, network, wifi, proxy stats
+  keepgoing version                 print release version
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
   keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
   keepgoing daemon [flags]          foreground daemon (what install runs)
@@ -253,6 +259,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 
 	co.px.Extra = func() map[string]any {
 		m := map[string]any{
+			"version":        version,
 			"agents":         procwatch.Summary(procs),
 			"agent_procs":    procs,
 			"awake":          holder != nil,

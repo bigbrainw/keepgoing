@@ -28,6 +28,7 @@ final class App: NSObject, NSApplicationDelegate {
     var timer: Timer?
 
     // menu items we update in place
+    let versionItem = NSMenuItem()
     let agentsItem = NSMenuItem()
     let awakeItem = NSMenuItem()
     let netItem = NSMenuItem()
@@ -50,6 +51,11 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     func buildMenu() {
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        versionItem.title = "KeepGoing v\(ver)"
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
+        menu.addItem(.separator())
         for it in [agentsItem, awakeItem, netItem, hotspotItem, lidItem] { it.isEnabled = false; menu.addItem(it) }
         menu.addItem(.separator())
         alwaysItem.target = self; menu.addItem(alwaysItem)
