@@ -140,7 +140,7 @@ func usage() {
   keepgoing uninstall
   keepgoing status                  agents, awake, network, wifi, proxy stats
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
-  keepgoing lid enable|disable|status   keep running with the lid closed (one-time admin password)
+  keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
   keepgoing run [flags] -- claude -p "task" --dangerously-skip-permissions
@@ -350,10 +350,13 @@ func kickDaemon() {
 
 func cmdLid(args []string, saved config.Config) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: keepgoing lid enable|disable|status")
+		fmt.Fprintln(os.Stderr, "usage: keepgoing lid enable|disable|status|install-script")
 		return 2
 	}
 	switch args[0] {
+	case "install-script":
+		fmt.Print(lid.InstallScript)
+		return 0
 	case "enable":
 		if !lid.Available() {
 			fmt.Println("One-time setup: a sudoers rule so the daemon can run exactly these two commands without a password:")

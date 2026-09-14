@@ -12,6 +12,9 @@ struct Status {
     var awake = false
     var online = false
     var always = false
+    var lidMode = false
+    var lidReady = false
+    var sleepDisabled = false
     var hotspot = ""
     var held: Int = 0
     var stateSince = ""
@@ -29,7 +32,9 @@ final class App: NSObject, NSApplicationDelegate {
     let awakeItem = NSMenuItem()
     let netItem = NSMenuItem()
     let hotspotItem = NSMenuItem()
+    let lidItem = NSMenuItem()
     let alwaysItem = NSMenuItem(title: "Always keep awake", action: #selector(toggleAlways), keyEquivalent: "")
+    let lidToggleItem = NSMenuItem(title: "Keep running with lid closed", action: #selector(toggleLid), keyEquivalent: "")
     let daemonItem = NSMenuItem(title: "Daemon: …", action: nil, keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleLogin), keyEquivalent: "")
 
@@ -45,9 +50,10 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     func buildMenu() {
-        for it in [agentsItem, awakeItem, netItem, hotspotItem] { it.isEnabled = false; menu.addItem(it) }
+        for it in [agentsItem, awakeItem, netItem, hotspotItem, lidItem] { it.isEnabled = false; menu.addItem(it) }
         menu.addItem(.separator())
         alwaysItem.target = self; menu.addItem(alwaysItem)
+        lidToggleItem.target = self; menu.addItem(lidToggleItem)
         let hs = NSMenuItem(title: "Set hotspot…", action: #selector(setHotspot), keyEquivalent: ""); hs.target = self; menu.addItem(hs)
         menu.addItem(.separator())
         daemonItem.isEnabled = false; menu.addItem(daemonItem)
@@ -70,6 +76,9 @@ final class App: NSObject, NSApplicationDelegate {
                 s.awake = j["awake"] as? Bool ?? false
                 s.online = j["online"] as? Bool ?? false
                 s.always = j["always_awake"] as? Bool ?? false
+                s.lidMode = j["lid_mode"] as? Bool ?? false
+                s.lidReady = j["lid_ready"] as? Bool ?? false
+                s.sleepDisabled = j["sleep_disabled"] as? Bool ?? false
                 s.hotspot = j["hotspot"] as? String ?? ""
                 s.stateSince = j["state_since"] as? String ?? ""
                 if let st = j["stats"] as? [String: Any] { s.held = st["held"] as? Int ?? 0 }
@@ -83,7 +92,7 @@ final class App: NSObject, NSApplicationDelegate {
         guard s.reachable else {
             item.button?.image = symbol("bolt.slash")
             agentsItem.title = "Daemon not running"
-            awakeItem.title = ""; netItem.title = ""; hotspotItem.title = ""
+            awakeItem.title = ""; netItem.title = ""; hotspotItem.title = ""; lidItem.title = ""
             daemonItem.title = "Daemon: stopped"
             return
         }
@@ -92,7 +101,15 @@ final class App: NSObject, NSApplicationDelegate {
         awakeItem.title = s.awake ? "Sleep: blocked" : "Sleep: allowed (no agents)"
         netItem.title = s.online ? "Network: online" : "Network: OFFLINE — recovering…"
         hotspotItem.title = s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)"
+        if s.lidMode && !s.lidReady {
+            lidItem.title = "Lid: setup needed"
+        } else if s.lidReady && s.sleepDisabled {
+            lidItem.title = "Lid: safe to close"
+        } else {
+            lidItem.title = "Lid: will sleep"
+        }
         alwaysItem.state = s.always ? .on : .off
+        lidToggleItem.state = s.lidMode ? .on : .off
         daemonItem.title = "Daemon: running · \(s.held) requests held"
     }
 
@@ -139,15 +156,94 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     @objc func toggleAlways() {
-        let path = NSHomeDirectory() + "/.config/keepgoing/config.json"
+        setConfigKey("always_awake", value: !status.always)
+        restartDaemon()
+    }
+
+    func configPath() -> String {
+        NSHomeDirectory() + "/.config/keepgoing/config.json"
+    }
+
+    func loadConfig() -> [String: Any] {
         var j: [String: Any] = [:]
-        if let d = FileManager.default.contents(atPath: path),
+        if let d = FileManager.default.contents(atPath: configPath()),
            let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] { j = o }
-        j["always_awake"] = !status.always
+        return j
+    }
+
+    func saveConfig(_ j: [String: Any]) {
+        let path = configPath()
         try? FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
         if let d = try? JSONSerialization.data(withJSONObject: j, options: .prettyPrinted) {
             FileManager.default.createFile(atPath: path, contents: d, attributes: [.posixPermissions: 0o600])
         }
+    }
+
+    func setConfigKey(_ key: String, value: Any) {
+        var j = loadConfig()
+        j[key] = value
+        saveConfig(j)
+    }
+
+    @objc func toggleLid() {
+        let enabling = !status.lidMode
+        if enabling && !status.lidReady {
+            let alert = NSAlert()
+            alert.messageText = "Keep running with the lid closed"
+            alert.informativeText = """
+            One-time setup: macOS will ask for your admin password to install a sudoers rule. It allows exactly these two commands, nothing else:
+
+              /usr/bin/pmset -a disablesleep 1
+              /usr/bin/pmset -a disablesleep 0
+
+            While agents run, closing the lid no longer sleeps the Mac. Sleep returns 5 minutes after the last agent exits.
+
+            Warning: a closed laptop under load gets warm — keep it on a surface, not in a bag, and prefer plugged in.
+            """
+            alert.addButton(withTitle: "Install"); alert.addButton(withTitle: "Cancel")
+            NSApp.activate(ignoringOtherApps: true)
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                refresh()
+                return
+            }
+            let (_, script) = run([cli, "lid", "install-script"])
+            guard !script.isEmpty else {
+                let e = NSAlert(); e.messageText = "Could not read install script"; e.runModal()
+                refresh()
+                return
+            }
+            let escaped = script
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\r\n", with: "\n")
+                .replacingOccurrences(of: "\r", with: "\n")
+                .replacingOccurrences(of: "\n", with: "\\n")
+            var err: NSDictionary?
+            let source = "do shell script \"\(escaped)\" with administrator privileges"
+            guard let appleScript = NSAppleScript(source: source) else {
+                refresh()
+                return
+            }
+            _ = appleScript.executeAndReturnError(&err)
+            if err != nil {
+                let e = NSAlert()
+                e.messageText = "Lid setup failed"
+                e.informativeText = err?.description ?? "Unknown error"
+                e.runModal()
+                refresh()
+                return
+            }
+            setConfigKey("lid_mode", value: true)
+            restartDaemon()
+            return
+        }
+        if enabling {
+            setConfigKey("lid_mode", value: true)
+            restartDaemon()
+            return
+        }
+        setConfigKey("lid_mode", value: false)
+        run([cli, "lid", "disable"])
         restartDaemon()
     }
 
