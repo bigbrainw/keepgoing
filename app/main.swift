@@ -1,6 +1,4 @@
-// KeepGoing menu bar app. Thin UI over the keepgoing daemon: shows agents /
-// awake / online state, toggles always-awake, sets hotspot, opens the log.
-// The daemon itself runs under launchd (installed by the bundled CLI).
+// KeepGoing menu bar app. Thin UI over the keepgoing daemon.
 import Cocoa
 import ServiceManagement
 
@@ -16,65 +14,102 @@ struct Status {
     var lidReady = false
     var sleepDisabled = false
     var hotspot = ""
-    var held: Int = 0
-    var stateSince = ""
     var reachable = false
 }
 
-final class App: NSObject, NSApplicationDelegate {
+final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var item: NSStatusItem!
     var menu = NSMenu()
     var status = Status()
     var timer: Timer?
+    var failCount = 0
 
-    // menu items we update in place
+    var renderedIcon = ""
+    var renderedVersion = ""
+    var renderedAgents = ""
+    var renderedSleep = ""
+    var renderedLid = ""
+    var renderedNetwork = ""
+    var renderedHotspot = ""
+    var renderedAlways = false
+    var renderedLidToggle = false
+    var renderedLogin = false
+    var renderedStartHidden = true
+    var renderedRestartHidden = false
+
     let versionItem = NSMenuItem()
     let agentsItem = NSMenuItem()
-    let awakeItem = NSMenuItem()
+    let sleepItem = NSMenuItem()
+    let lidItem = NSMenuItem()
     let netItem = NSMenuItem()
     let hotspotItem = NSMenuItem()
-    let lidItem = NSMenuItem()
+    let lidToggleItem = NSMenuItem(title: "Keep awake with lid closed", action: #selector(toggleLid), keyEquivalent: "")
     let alwaysItem = NSMenuItem(title: "Always keep awake", action: #selector(toggleAlways), keyEquivalent: "")
-    let lidToggleItem = NSMenuItem(title: "Keep running with lid closed", action: #selector(toggleLid), keyEquivalent: "")
-    let daemonItem = NSMenuItem(title: "Daemon: …", action: nil, keyEquivalent: "")
+    let hotspotActionItem = NSMenuItem(title: "Set hotspot…", action: #selector(setHotspot), keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleLogin), keyEquivalent: "")
+    let logItem = NSMenuItem(title: "Show log", action: #selector(openLog), keyEquivalent: "l")
+    let startDaemonItem = NSMenuItem(title: "Start daemon", action: #selector(startDaemon), keyEquivalent: "")
+    let restartItem = NSMenuItem(title: "Restart daemon", action: #selector(restartDaemon), keyEquivalent: "")
+    let aboutItem = NSMenuItem(title: "About KeepGoing", action: #selector(showAbout), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ n: Notification) {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = symbol("bolt.slash")
         buildMenu()
         item.menu = menu
+        menu.delegate = self
         ensureDaemon()
         showOnboardingIfNeeded()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in self.refresh() }
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        renderedLogin = loginItem.state == .on
     }
 
     func buildMenu() {
-        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        versionItem.title = "KeepGoing v\(ver)"
         versionItem.isEnabled = false
         menu.addItem(versionItem)
         menu.addItem(.separator())
-        for it in [agentsItem, awakeItem, netItem, hotspotItem, lidItem] { it.isEnabled = false; menu.addItem(it) }
+        for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem] {
+            it.isEnabled = false
+            menu.addItem(it)
+        }
         menu.addItem(.separator())
-        alwaysItem.target = self; menu.addItem(alwaysItem)
-        lidToggleItem.target = self; menu.addItem(lidToggleItem)
-        let hs = NSMenuItem(title: "Set hotspot…", action: #selector(setHotspot), keyEquivalent: ""); hs.target = self; menu.addItem(hs)
+        lidToggleItem.target = self
+        alwaysItem.target = self
+        hotspotActionItem.target = self
+        menu.addItem(lidToggleItem)
+        menu.addItem(alwaysItem)
+        menu.addItem(hotspotActionItem)
         menu.addItem(.separator())
-        daemonItem.isEnabled = false; menu.addItem(daemonItem)
-        let restart = NSMenuItem(title: "Restart daemon", action: #selector(restartDaemon), keyEquivalent: ""); restart.target = self; menu.addItem(restart)
-        let log = NSMenuItem(title: "Open log", action: #selector(openLog), keyEquivalent: "l"); log.target = self; menu.addItem(log)
-        loginItem.target = self; menu.addItem(loginItem)
+        loginItem.target = self
+        logItem.target = self
+        startDaemonItem.target = self
+        restartItem.target = self
+        menu.addItem(loginItem)
+        menu.addItem(logItem)
+        startDaemonItem.isHidden = true
+        menu.addItem(startDaemonItem)
+        menu.addItem(restartItem)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit KeepGoing", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"); menu.addItem(quit)
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+        let quit = NSMenuItem(title: "Quit KeepGoing", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quit)
+
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        setTitle(versionItem, to: "KeepGoing \(ver)", store: &renderedVersion)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        refresh()
     }
 
     // MARK: state
 
     func refresh() {
-        var req = URLRequest(url: statusURL); req.timeoutInterval = 2
+        var req = URLRequest(url: statusURL)
+        req.timeoutInterval = 2
         URLSession.shared.dataTask(with: req) { data, _, _ in
             var s = Status()
             if let d = data, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
@@ -87,43 +122,107 @@ final class App: NSObject, NSApplicationDelegate {
                 s.lidReady = j["lid_ready"] as? Bool ?? false
                 s.sleepDisabled = j["sleep_disabled"] as? Bool ?? false
                 s.hotspot = j["hotspot"] as? String ?? ""
-                s.stateSince = j["state_since"] as? String ?? ""
-                if let st = j["stats"] as? [String: Any] { s.held = st["held"] as? Int ?? 0 }
             }
-            DispatchQueue.main.async { self.status = s; self.render() }
+            DispatchQueue.main.async {
+                if s.reachable {
+                    self.failCount = 0
+                } else {
+                    self.failCount += 1
+                }
+                self.status = s
+                self.render()
+            }
         }.resume()
+    }
+
+    var daemonUp: Bool {
+        status.reachable && failCount < 3
     }
 
     func render() {
         let s = status
-        guard s.reachable else {
-            item.button?.image = symbol("bolt.slash")
-            agentsItem.title = "Daemon not running"
-            awakeItem.title = ""; netItem.title = ""; hotspotItem.title = ""; lidItem.title = ""
-            daemonItem.title = "Daemon: stopped"
-            return
+        let up = daemonUp
+
+        let icon = statusIcon(up: up, s: s)
+        if icon != renderedIcon {
+            item.button?.image = symbol(icon)
+            renderedIcon = icon
         }
-        item.button?.image = symbol(!s.online ? "wifi.slash" : (s.awake ? "bolt.fill" : "moon.zzz"))
-        agentsItem.title = "Agents: \(s.agents)"
-        awakeItem.title = s.awake ? "Sleep: blocked" : "Sleep: allowed (no agents)"
-        netItem.title = s.online ? "Network: online" : "Network: OFFLINE — recovering…"
-        hotspotItem.title = s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)"
-        if s.lidMode && !s.lidReady {
-            lidItem.title = "Lid: setup needed"
-        } else if s.lidReady && s.sleepDisabled {
-            lidItem.title = "Lid: safe to close"
+
+        if up {
+            let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+            setTitle(versionItem, to: "KeepGoing \(ver)", store: &renderedVersion)
+            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem] { it.isHidden = false }
+            setTitle(agentsItem, to: "Agents: \(formatAgents(s.agents))", store: &renderedAgents)
+            setTitle(sleepItem, to: s.awake ? "Sleep: blocked" : "Sleep: allowed — no agents", store: &renderedSleep)
+            setTitle(lidItem, to: lidStatus(s), store: &renderedLid)
+            setTitle(netItem, to: s.online ? "Network: online" : "Network: offline — recovering", store: &renderedNetwork)
+            setTitle(hotspotItem, to: s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)", store: &renderedHotspot)
+            setCheck(lidToggleItem, s.lidMode, store: &renderedLidToggle)
+            setCheck(alwaysItem, s.always, store: &renderedAlways)
         } else {
-            lidItem.title = "Lid: will sleep"
+            setTitle(versionItem, to: "Daemon not running", store: &renderedVersion)
+            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem] { it.isHidden = true }
         }
-        alwaysItem.state = s.always ? .on : .off
-        lidToggleItem.state = s.lidMode ? .on : .off
-        daemonItem.title = "Daemon: running · \(s.held) requests held"
+
+        let loginOn = SMAppService.mainApp.status == .enabled
+        setCheck(loginItem, loginOn, store: &renderedLogin)
+
+        let showStart = !up
+        if showStart != !renderedStartHidden {
+            startDaemonItem.isHidden = !showStart
+            renderedStartHidden = !showStart
+        }
+        if up != !renderedRestartHidden {
+            restartItem.isHidden = !up
+            renderedRestartHidden = !up
+        }
+    }
+
+    func statusIcon(up: Bool, s: Status) -> String {
+        if !up { return "bolt.slash" }
+        if !s.online { return "wifi.slash" }
+        if !s.awake { return "moon.zzz" }
+        let lidSafe = s.lidReady && s.sleepDisabled
+        return lidSafe ? "bolt.fill" : "bolt"
+    }
+
+    func lidStatus(_ s: Status) -> String {
+        if s.lidMode && !s.lidReady { return "Lid: setup needed" }
+        if s.lidReady && s.sleepDisabled { return "Lid: safe to close" }
+        return "Lid: will sleep"
+    }
+
+    func formatAgents(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed == "?" { return "none" }
+        let parts = trimmed.split(separator: " ").map { part -> String in
+            var s = String(part).replacingOccurrences(of: "×", with: " ")
+            s = s.replacingOccurrences(of: "codex-app", with: "codex")
+            return s
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    func setTitle(_ item: NSMenuItem, to title: String, store: inout String) {
+        if title != store {
+            item.title = title
+            store = title
+        }
+    }
+
+    func setCheck(_ item: NSMenuItem, _ on: Bool, store: inout Bool) {
+        let state: NSControl.StateValue = on ? .on : .off
+        if on != store || item.state != state {
+            item.state = state
+            store = on
+        }
     }
 
     func symbol(_ name: String) -> NSImage? {
-        let img = NSImage(systemSymbolName: name, accessibilityDescription: "KeepGoing")
-        img?.isTemplate = true
-        return img
+        guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return nil }
+        img.isTemplate = true
+        return img.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular))
     }
 
     // MARK: actions
@@ -137,9 +236,12 @@ final class App: NSObject, NSApplicationDelegate {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: args[0])
         p.arguments = Array(args.dropFirst())
-        let out = Pipe(); p.standardOutput = out; p.standardError = out
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = out
         if let input = input {
-            let inp = Pipe(); p.standardInput = inp
+            let inp = Pipe()
+            p.standardInput = inp
             try? p.run()
             inp.fileHandleForWriting.write((input + "\n").data(using: .utf8)!)
             inp.fileHandleForWriting.closeFile()
@@ -152,9 +254,19 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     func ensureDaemon() {
-        // if launchd job missing, install it using the bundled CLI
         let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(label)"])
         if code != 0 { run([cli, "install"]) }
+    }
+
+    @objc func startDaemon() {
+        let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(label)"])
+        if code != 0 {
+            run([cli, "install"])
+        } else {
+            run(["/bin/launchctl", "kickstart", "-k", "gui/\(getuid())/\(label)"])
+        }
+        failCount = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.refresh() }
     }
 
     @objc func restartDaemon() {
@@ -184,16 +296,10 @@ final class App: NSObject, NSApplicationDelegate {
     func showOnboardingIfNeeded() {
         guard !FileManager.default.fileExists(atPath: onboardedPath()) else { return }
         let alert = NSAlert()
-        alert.messageText = "Welcome to KeepGoing"
-        alert.informativeText = """
-        KeepGoing keeps your Mac awake and online while Claude Code, Codex, or Cursor agents run — so remote control from your phone keeps working when you step away.
-
-        Enable “Keep running with lid closed” for a one-time admin setup that lets agents survive closing the laptop lid (while agents are running).
-
-        Set a hotspot fallback in the menu if you want KeepGoing to auto-join your phone’s hotspot when Wi-Fi drops.
-        """
+        alert.messageText = "KeepGoing keeps your Mac awake while agents run."
+        alert.informativeText = "Lid mode needs your admin password once so the Mac stays awake when the lid is closed."
         alert.addButton(withTitle: "Set up lid mode")
-        alert.addButton(withTitle: "Later")
+        alert.addButton(withTitle: "Not now")
         NSApp.activate(ignoringOtherApps: true)
         let setup = alert.runModal() == .alertFirstButtonReturn
         markOnboarded()
@@ -221,22 +327,25 @@ final class App: NSObject, NSApplicationDelegate {
         saveConfig(j)
     }
 
+    func showError(_ operation: String, detail: String) {
+        let alert = NSAlert()
+        alert.messageText = operation
+        alert.informativeText = detail.isEmpty ? "Unknown error" : detail
+        alert.runModal()
+    }
+
     @objc func toggleLid() {
         let enabling = !status.lidMode
         if enabling && !status.lidReady {
             let alert = NSAlert()
-            alert.messageText = "Keep running with the lid closed"
+            alert.messageText = "Allow KeepGoing to override lid-closed sleep?"
             alert.informativeText = """
-            One-time setup: macOS will ask for your admin password to install a sudoers rule. It allows exactly these two commands, nothing else:
-
-              /usr/bin/pmset -a disablesleep 1
-              /usr/bin/pmset -a disablesleep 0
-
-            While agents run, closing the lid no longer sleeps the Mac. Sleep returns 5 minutes after the last agent exits.
-
-            Warning: a closed laptop under load gets warm — keep it on a surface, not in a bag, and prefer plugged in.
+            /usr/bin/pmset -a disablesleep 1
+            /usr/bin/pmset -a disablesleep 0
+            Asked once. Remove any time with sudo rm /etc/sudoers.d/keepgoing.
             """
-            alert.addButton(withTitle: "Install"); alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Install")
+            alert.addButton(withTitle: "Cancel")
             NSApp.activate(ignoringOtherApps: true)
             guard alert.runModal() == .alertFirstButtonReturn else {
                 refresh()
@@ -244,7 +353,7 @@ final class App: NSObject, NSApplicationDelegate {
             }
             let (_, script) = run([cli, "lid", "install-script"])
             guard !script.isEmpty else {
-                let e = NSAlert(); e.messageText = "Could not read install script"; e.runModal()
+                showError("Couldn't read install script", detail: script)
                 refresh()
                 return
             }
@@ -261,11 +370,8 @@ final class App: NSObject, NSApplicationDelegate {
                 return
             }
             _ = appleScript.executeAndReturnError(&err)
-            if err != nil {
-                let e = NSAlert()
-                e.messageText = "Lid setup failed"
-                e.informativeText = err?.description ?? "Unknown error"
-                e.runModal()
+            if let err {
+                showError("Couldn't install lid rule", detail: err.description)
                 refresh()
                 return
             }
@@ -285,20 +391,26 @@ final class App: NSObject, NSApplicationDelegate {
 
     @objc func setHotspot() {
         let alert = NSAlert()
-        alert.messageText = "Hotspot fallback"
-        alert.informativeText = "When Wi-Fi is gone for 20s+, KeepGoing bounces the radio, then joins this hotspot. Password is stored in your login Keychain."
-        alert.addButton(withTitle: "Save"); alert.addButton(withTitle: "Cancel")
+        alert.messageText = "Join this hotspot when Wi-Fi is lost"
+        alert.informativeText = ""
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
         let box = NSStackView(frame: NSRect(x: 0, y: 0, width: 280, height: 56))
-        box.orientation = .vertical; box.spacing = 6
-        let ssid = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24)); ssid.placeholderString = "Hotspot name (SSID)"; ssid.stringValue = status.hotspot
-        let pw = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24)); pw.placeholderString = "Password"
-        box.addArrangedSubview(ssid); box.addArrangedSubview(pw)
+        box.orientation = .vertical
+        box.spacing = 6
+        let ssid = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        ssid.placeholderString = "Hotspot name (SSID)"
+        ssid.stringValue = status.hotspot
+        let pw = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        pw.placeholderString = "Password"
+        box.addArrangedSubview(ssid)
+        box.addArrangedSubview(pw)
         alert.accessoryView = box
         NSApp.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn, !ssid.stringValue.isEmpty, !pw.stringValue.isEmpty else { return }
         let (code, out) = run([cli, "hotspot", "set", ssid.stringValue], input: pw.stringValue)
         if code != 0 {
-            let e = NSAlert(); e.messageText = "Could not save hotspot"; e.informativeText = out; e.runModal()
+            showError("Couldn't save hotspot", detail: out)
         }
         restartDaemon()
     }
@@ -312,9 +424,17 @@ final class App: NSObject, NSApplicationDelegate {
         do {
             if svc.status == .enabled { try svc.unregister() } else { try svc.register() }
         } catch {
-            let e = NSAlert(); e.messageText = "Login item"; e.informativeText = error.localizedDescription; e.runModal()
+            showError("Couldn't update login item", detail: error.localizedDescription)
         }
         loginItem.state = svc.status == .enabled ? .on : .off
+        renderedLogin = loginItem.state == .on
+    }
+
+    @objc func showAbout() {
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "KeepGoing",
+            .credits: NSAttributedString(string: "Open source, MIT. github.com/bigbrainw/keepgoing")
+        ])
     }
 }
 
