@@ -7,6 +7,25 @@ Cursor) keeps working when you're away from the desk.
 You launch agents however you already do. keepgoing is a background daemon
 that only makes sure the machine and the Wi-Fi stay up while they're alive.
 
+## Install
+
+Download `KeepGoing-0.1.0.zip` from [Releases](https://github.com/bigbrainw/keepgoing/releases), unzip, and drag **KeepGoing.app** to **Applications**.
+
+This build is ad-hoc signed and not yet notarised. On first open, macOS may block it:
+
+```
+xattr -d com.apple.quarantine /Applications/KeepGoing.app
+```
+
+Or right-click **KeepGoing.app** → **Open** once to approve it. Then open normally from Applications or the menu bar.
+
+Full removal:
+
+```
+keepgoing uninstall
+sudo rm /etc/sudoers.d/keepgoing   # only if you enabled lid mode
+```
+
 ## The app
 
 `KeepGoing.app` — menu bar icon. ⚡ = agents running, sleep blocked · 💤 = idle, sleep allowed · wifi-slash = offline, recovering.
