@@ -1,67 +1,98 @@
 # keepgoing — task queue for Cursor agent
 
-Phases 1–3 DONE (repo public, v0.1.0 released, landing at https://keepgoing-pi.vercel.app).
-**Phase 4: polish the Mac app.** `app/main.swift` only (plus `keepgoing-cli` if a status field is missing).
+**Phase 5: rebuild the landing page. Fewer words, more pictures, a live demo.**
+Live site: https://keepgoing-pi.vercel.app (`site/`). Elijah's verdict on the current page: "too many words, needs to be super simple, more images, live demo."
 
-## Skill
+## Skills
+Read both before starting: `~/.cursor/skills/landing-page-polish/SKILL.md` and `~/.cursor/skills/native-mac-polish/SKILL.md` (the second one for any recreated Mac UI — real strings only).
 
-Load and follow `~/.cursor/skills/native-mac-polish/SKILL.md` for every string and control. The goal: someone opening this menu should think "Apple-quality utility", not "AI made this". Bar = Amphetamine, iStat Menus, Bartender.
+## Hard rules
+- Static HTML/CSS + small vanilla JS (demo + copy buttons, ≤ 120 lines total). No frameworks, no webfonts, no CDNs, no external images.
+- Total page words (excluding code blocks and FAQ) **≤ 180**. Count them. If over, cut.
+- No sudo/pmset/wifi. Do not rewrite git history (no amend/rebase of pushed commits). Commit per task, push after each.
+- Deploy: `cd site && vercel --prod --yes`.
+- Every Mac UI string shown must match the shipped app exactly (see menu below).
 
-## Hard rules (same as before)
-
-- `./app/build.sh`; bundle binary stays `keepgoing-cli`. No sudo/pmset/visudo, no Wi-Fi bounce; test daemons on ports 7790/7791 with `-no-wifi`.
-- Deploy: `rm -rf ~/Applications/KeepGoing.app && cp -R dist/KeepGoing.app ~/Applications/ && launchctl kickstart -k gui/$(id -u)/com.elijah.keepgoing && open ~/Applications/KeepGoing.app`.
-- Stock AppKit only. No new dependencies. No custom menu views.
-- Commit after each task, Conventional Commits, subject ≤ 50 chars.
-
-## Tasks
-
-### 1. Menu structure + copy (skill §Text, §Menu bar apps)
-Target menu, top to bottom:
+## The shipped menu (recreate pixel-faithfully; these are the real strings)
 ```
-KeepGoing 0.1.0                      (disabled)
+KeepGoing 0.1.0
 ──────────
-Agents: claude 13 · codex 4          (disabled; "none" when empty)
-Sleep: blocked                       (or "allowed — no agents")
-Lid: safe to close                   (or "will sleep" / "setup needed")
-Network: online                      (or "offline — recovering")
-Hotspot: iPhone                      (or "not set")
+Agents: claude 13 · codex 4
+Sleep: blocked
+Lid: safe to close
+Network: online
+Hotspot: iPhone
 ──────────
-☐ Keep awake with lid closed
-☐ Always keep awake
+✓ Keep awake with lid closed
+  Always keep awake
   Set hotspot…
 ──────────
-☐ Open at login
+  Open at login
   Show log
   Restart daemon
 ──────────
-  Quit KeepGoing                     ⌘Q
+  About KeepGoing
+  Quit KeepGoing              ⌘Q
 ```
-Drop "Daemon: running · N requests held" from the menu (developer noise). If the daemon is down, first item becomes `Daemon not running` and a `Start daemon` action appears in the actions group. Replace the `×` in agent counts with a space.
+Icon states (SF Symbol names): `bolt.fill` agents + lid safe · `bolt` agents, lid will sleep · `moon.zzz` idle · `wifi.slash` offline.
 
-### 2. Status icon states
-Exactly four template SF Symbols, 16 pt, `isTemplate = true`:
-- agents running, lid safe → `bolt.fill`
-- agents running, lid will sleep → `bolt`
-- idle / no agents → `moon.zzz` (keep)
-- offline → `wifi.slash` (takes priority)
-- daemon down → `bolt.slash`
-Remove any duplicate assignment paths; one `render()` decides the symbol.
+## Page — exactly these sections, in order
 
-### 3. Alerts (skill §Text)
-Rewrite the four alerts to the skill's limits:
-- Onboarding: messageText `KeepGoing keeps your Mac awake while agents run.` informativeText one sentence about lid mode needing an admin password once. Buttons `Set up lid mode` / `Not now`.
-- Lid setup: messageText `Allow KeepGoing to override lid-closed sleep?` informativeText: the two exact pmset commands + "Asked once. Remove any time with `sudo rm /etc/sudoers.d/keepgoing`." Buttons `Install` / `Cancel`.
-- Hotspot: messageText `Join this hotspot when Wi-Fi is lost`. Fields unchanged. Buttons `Save` / `Cancel`.
-- Errors: messageText names the operation (`Couldn't save hotspot`), informativeText = the raw error string. No "Unknown error" unless the string is empty.
+### 1. Hero (≤ 25 words)
+H1: **Don't wait for the prompt to finish. Close the lid.**
+One line: *Your agent finishes the job while you travel. KeepGoing keeps a Mac awake and online for Claude Code and Codex — and reachable from your phone — with the laptop shut.*
+(Keep "Close the lid. Your agent keeps going." as the `<title>` and OG title.)
+Buttons: **Download for macOS** (→ https://github.com/bigbrainw/keepgoing/releases/latest) · GitHub.
+Right side (desktop) / below (mobile): **real screenshot** of the open menu (task A). Fallback: CSS recreation of the menu above, dark, with a macOS menu bar strip on top.
 
-### 4. Flicker + resilience
-- Only assign `title`/`image`/`state` when the value changed (compare before set).
-- If `/_status` fails 3 polls in a row, show the daemon-down state; do not spam alerts.
-- `refresh()` interval 3 s stays; also refresh immediately when the menu is about to open (`NSMenuDelegate.menuWillOpen`).
+### 2. Live demo (the centrepiece)
+An interactive SVG/CSS scene, no words above it except a small label "Try it".
+- Two laptops side by side: **Without KeepGoing** · **With KeepGoing**. Above each, a phone showing a chat bubble "Run the tests and fix what breaks".
+- One button under the scene: **Close the lid**. On click: both lids animate shut (CSS transform, ~600 ms).
+  - Left: screen goes dark, phone bubble gets "…" then a grey "No reply". Small caption fades in: *macOS sleeps in 67 s.*
+  - Right: lid closes but a thin light stays on the hinge, ⚡ appears in a tiny menu bar, phone bubble gets a green reply "Done — 3 tests fixed". Caption: *Still running.*
+- Button becomes **Open the lid** → reverses. `prefers-reduced-motion` → instant states, no animation.
+- Everything drawn inline (SVG paths for laptop + phone, ≤ 8 KB). No images.
 
-### 5. About + version
-`About KeepGoing` item (app group, above Quit) → `NSApp.orderFrontStandardAboutPanel` with `Credits` = one line "Open source, MIT. github.com/bigbrainw/keepgoing". Info.plist gets `NSHumanReadableCopyright` already; keep it.
+### 3. Three pictures, one line each (h2 "What it does", ≤ 30 words total)
+Row of three real screenshots (task A) or faithful CSS recreations:
+1. Menu bar icon states (four icons in a row) — caption: *Watches your agents.*
+2. The lid setup alert ("Allow KeepGoing to override lid-closed sleep?") — caption: *Asks for your password once.*
+3. Menu showing `Network: offline — recovering` + `Hotspot: iPhone` — caption: *Rejoins Wi-Fi or your hotspot.*
 
-### 6. Build, deploy, verify, report
-Build + deploy. Confirm with `keepgoing status` the daemon is up and the app is running (`pgrep -fl MacOS/KeepGoing`). Paste the final menu as text in your report. List every user-visible string you changed (old → new).
+### 4. Install (≤ 40 words)
+Three steps, each one line + one command with copy button:
+1. Download, drag to Applications.
+2. `xattr -d com.apple.quarantine /Applications/KeepGoing.app` — *not notarised yet.*
+3. Click ⚡ → **Keep awake with lid closed**.
+
+### 5. Proof (no heading, one mono block, keep as is)
+```
+$ ioreg -r -k AppleClamshellState -d 4 | grep State
+"AppleClamshellState" = Yes        # lid closed
+$ pmset -g | grep SleepDisabled
+SleepDisabled 1                    # still running, on battery
+```
+Caption (≤ 15 words): *MacBook Pro, macOS 26, on battery, replied from a phone through Claude Code.*
+
+### 6. FAQ — 4 items, one sentence each
+- Hot in a bag? — Warm under load; keep it on a surface, plug in if you can.
+- Battery? — 2–5 h awake; it re-enables sleep 5 min after agents stop.
+- My keys / code? — Never touched; it only watches process names, power, and network.
+- Why a password? — Only root can override lid sleep; the rule allows two `pmset` commands and nothing else.
+
+### 7. Footer
+MIT · GitHub · Issues · v0.1.0
+
+## Tasks (in order)
+
+### A. Real screenshots (try first, 10 min cap)
+The app is running. Try `screencapture -x -R <region> site/img/menu.png` after opening the menu via AppleScript (`tell application "System Events" to click menu bar item 1 of menu bar 2 of application process "KeepGoing"`). If Screen Recording permission is denied for your terminal, stop and use CSS recreations; note it in the report. Save PNGs at 2× into `site/img/`, ≤ 200 KB each, with width/height attributes in HTML.
+
+### B. Rebuild `site/index.html` + `site/style.css` per the section list. Dark and light. Word count ≤ 180 — put the count in your commit message.
+
+### C. Live demo (section 2) as `site/demo.js` + inline SVG. Test: click works, reduced-motion works, no console errors, works at 390 px.
+
+### D. Favicon (inline SVG bolt), `theme-color` both schemes, OG/Twitter meta with `site/img/og.png` (1200×630) rendered by a small Swift or `sips` script in `site/make-og.sh` from the hero text — no external services.
+
+### E. Deploy, then screenshot the deployed page at 390 and 1280 (`npx playwright` is NOT allowed — use `screencapture` of a browser window or skip). Report: URL, word count, which images are real vs CSS, anything you deviated from.
