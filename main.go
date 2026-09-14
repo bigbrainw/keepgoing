@@ -29,6 +29,7 @@ import (
 	"github.com/elijah/keepgoing/internal/agents"
 	"github.com/elijah/keepgoing/internal/awake"
 	"github.com/elijah/keepgoing/internal/config"
+	"github.com/elijah/keepgoing/internal/lid"
 	"github.com/elijah/keepgoing/internal/netwatch"
 	"github.com/elijah/keepgoing/internal/procwatch"
 	"github.com/elijah/keepgoing/internal/proxy"
@@ -101,6 +102,8 @@ func main() {
 		os.Exit(cmdStatus(base))
 	case "hotspot":
 		os.Exit(cmdHotspot(fs.Args(), saved))
+	case "lid":
+		os.Exit(cmdLid(fs.Args(), saved))
 	case "run":
 		if len(cmd) == 0 {
 			fmt.Fprintln(os.Stderr, "keepgoing run: missing command after --")
@@ -137,6 +140,7 @@ func usage() {
   keepgoing uninstall
   keepgoing status                  agents, awake, network, wifi, proxy stats
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
+  keepgoing lid enable|disable|status   keep running with the lid closed (one-time admin password)
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
   keepgoing run [flags] -- claude -p "task" --dangerously-skip-permissions
