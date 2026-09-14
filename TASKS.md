@@ -1,75 +1,67 @@
 # keepgoing — task queue for Cursor agent
 
-Phases 1–2.1 DONE (lid mode proven on real hardware; v0.1.0 draft release exists).
-**Phase 3: landing page.** One static page, deployed to Vercel.
+Phases 1–3 DONE (repo public, v0.1.0 released, landing at https://keepgoing-pi.vercel.app).
+**Phase 4: polish the Mac app.** `app/main.swift` only (plus `keepgoing-cli` if a status field is missing).
 
-## Hard rules
+## Skill
 
-- Plain static HTML + CSS in `site/index.html` (+ `site/style.css` if you like). **No framework, no build step, no JS beyond a tiny copy-to-clipboard**. No external fonts/CDNs — system font stack. Must look right at 390 px and 1440 px, light **and** dark (`prefers-color-scheme`).
-- Never run `sudo`, `pmset`, `visudo`, or bounce Wi-Fi. Don't touch the Go/Swift code in this phase.
-- Deploy: `cd site && vercel --prod --yes` (CLI is logged in as `bigbrainw`; project name `keepgoing`). Report the URL.
-- Commit after each task. Conventional Commits, subject ≤ 50 chars.
-- Use the copy below **verbatim** (fix typos only). Don't invent features we don't have. Don't add testimonials, logos, or fake stats.
+Load and follow `~/.cursor/skills/native-mac-polish/SKILL.md` for every string and control. The goal: someone opening this menu should think "Apple-quality utility", not "AI made this". Bar = Amphetamine, iStat Menus, Bartender.
 
-## Design brief
+## Hard rules (same as before)
 
-Feel: developer tool, calm, dark-first. One accent colour (amber/gold, like the ⚡ bolt). Big type, lots of air, thin 1 px borders, monospace for commands. Visual anchor in the hero: a CSS-drawn "menu bar" strip showing `⚡ KeepGoing` with a dropdown mock listing the real menu items (Agents / Sleep: blocked / Network: online / Lid: safe to close). No stock images. Section max-width ~880 px.
+- `./app/build.sh`; bundle binary stays `keepgoing-cli`. No sudo/pmset/visudo, no Wi-Fi bounce; test daemons on ports 7790/7791 with `-no-wifi`.
+- Deploy: `rm -rf ~/Applications/KeepGoing.app && cp -R dist/KeepGoing.app ~/Applications/ && launchctl kickstart -k gui/$(id -u)/com.elijah.keepgoing && open ~/Applications/KeepGoing.app`.
+- Stock AppKit only. No new dependencies. No custom menu views.
+- Commit after each task, Conventional Commits, subject ≤ 50 chars.
 
-## Page structure + copy
+## Tasks
 
-### Nav
-`⚡ KeepGoing` — links: How it works · Install · FAQ · GitHub (`https://github.com/bigbrainw/keepgoing`)
-
-### Hero
-**H1:** Close the lid. Your agent keeps going.
-**Sub:** KeepGoing is a tiny macOS menu bar app that keeps your Mac awake and online while Claude Code, Codex, or Cursor run — so the remote control on your phone still works when the laptop is shut in your bag.
-**Buttons:** `Download for macOS` (→ `https://github.com/bigbrainw/keepgoing/releases/latest`) · `View on GitHub`
-**Small print under buttons:** Apple Silicon & Intel · macOS 13+ · free & open source (MIT) · 3 MB
-
-### The problem (short, 3 bullets, no heading larger than h2 "Why")
-- You start a long agent run, close the lid, walk away. macOS sleeps. The run freezes.
-- Your phone's remote control goes quiet — the Mac it talks to is asleep.
-- Hop from office Wi-Fi to a hotspot and every in-flight request dies with it.
-
-### How it works (h2, 3 numbered cards)
-1. **Sees your agents.** Every 5 seconds it looks for `claude`, `codex` (including the app-server that ChatGPT / Codex desktop use), and `cursor-agent`.
-2. **Keeps the Mac awake — lid open or closed.** Holds a sleep assertion while an agent is alive. With lid mode on, closing the lid no longer sleeps the Mac. Releases 5 minutes after the last agent exits, so your battery is normal the rest of the time.
-3. **Keeps you online.** If the network is gone for 20 s it bounces the Wi-Fi radio; still gone, it joins your iPhone hotspot (password from Keychain). Optional holding proxy parks API calls while offline instead of failing them.
-
-### Proof strip (h2 "Tested on real hardware")
-Monospace block, exactly this:
+### 1. Menu structure + copy (skill §Text, §Menu bar apps)
+Target menu, top to bottom:
 ```
-$ keepgoing lid status
-lid_mode=true  sudoers_ready=true  sleep_disabled_now=true
-
-$ ioreg -r -k AppleClamshellState -d 4 | grep State
-"AppleClamshellState" = Yes        # lid physically closed
-$ pmset -g | grep SleepDisabled
-SleepDisabled 1                    # still running, on battery
+KeepGoing 0.1.0                      (disabled)
+──────────
+Agents: claude 13 · codex 4          (disabled; "none" when empty)
+Sleep: blocked                       (or "allowed — no agents")
+Lid: safe to close                   (or "will sleep" / "setup needed")
+Network: online                      (or "offline — recovering")
+Hotspot: iPhone                      (or "not set")
+──────────
+☐ Keep awake with lid closed
+☐ Always keep awake
+  Set hotspot…
+──────────
+☐ Open at login
+  Show log
+  Restart daemon
+──────────
+  Quit KeepGoing                     ⌘Q
 ```
-Caption: MacBook Pro, macOS 26.3, lid closed on battery — replied to a phone message through Claude Code remote control. With lid mode off, the same test slept in 67 seconds.
+Drop "Daemon: running · N requests held" from the menu (developer noise). If the daemon is down, first item becomes `Daemon not running` and a `Start daemon` action appears in the actions group. Replace the `×` in agent counts with a space.
 
-### Install (h2)
-Steps as a numbered list with copy buttons on commands:
-1. Download `KeepGoing-<version>.dmg` from Releases, drag to Applications.
-2. Not yet notarised — first launch: `xattr -d com.apple.quarantine /Applications/KeepGoing.app` (or right-click → Open).
-3. Click ⚡ → **Keep running with lid closed** → enter your admin password once. Optional: **Set hotspot…**.
-Note box: "The one-time admin prompt installs a sudoers rule allowing exactly two commands: `pmset -a disablesleep 1` and `pmset -a disablesleep 0`. Nothing else. Remove with `sudo rm /etc/sudoers.d/keepgoing`."
-CLI alternative, small: `keepgoing install · keepgoing status · keepgoing lid enable · keepgoing hotspot set "<iPhone>"`
+### 2. Status icon states
+Exactly four template SF Symbols, 16 pt, `isTemplate = true`:
+- agents running, lid safe → `bolt.fill`
+- agents running, lid will sleep → `bolt`
+- idle / no agents → `moon.zzz` (keep)
+- offline → `wifi.slash` (takes priority)
+- daemon down → `bolt.slash`
+Remove any duplicate assignment paths; one `render()` decides the symbol.
 
-### FAQ (h2, `<details>` accordions)
-- **Will my laptop get hot in a bag?** A closed laptop under agent load gets warm. Put it on a surface, prefer plugged in. Lid mode turns itself off 5 minutes after the last agent exits.
-- **Battery?** Awake on battery ≈ 2–5 h depending on load. Plug in for travel.
-- **Does it need my API keys or read my code?** No. It watches process names, power state, and network reachability. It never talks to Anthropic/OpenAI itself. The optional proxy is a plain passthrough on localhost.
-- **Why the admin password?** macOS only lets root override lid-closed sleep. See the note above — the rule is two exact commands.
-- **What about Windows / Linux?** macOS only today. Linux (systemd-inhibit + nmcli) is on the list.
-- **Does it launch agents for me?** No. Start them however you already do; KeepGoing just keeps the machine and the network up.
+### 3. Alerts (skill §Text)
+Rewrite the four alerts to the skill's limits:
+- Onboarding: messageText `KeepGoing keeps your Mac awake while agents run.` informativeText one sentence about lid mode needing an admin password once. Buttons `Set up lid mode` / `Not now`.
+- Lid setup: messageText `Allow KeepGoing to override lid-closed sleep?` informativeText: the two exact pmset commands + "Asked once. Remove any time with `sudo rm /etc/sudoers.d/keepgoing`." Buttons `Install` / `Cancel`.
+- Hotspot: messageText `Join this hotspot when Wi-Fi is lost`. Fields unchanged. Buttons `Save` / `Cancel`.
+- Errors: messageText names the operation (`Couldn't save hotspot`), informativeText = the raw error string. No "Unknown error" unless the string is empty.
 
-### Footer
-`MIT · Built by Elijah · GitHub · Report an issue` (issues → `https://github.com/bigbrainw/keepgoing/issues`)
+### 4. Flicker + resilience
+- Only assign `title`/`image`/`state` when the value changed (compare before set).
+- If `/_status` fails 3 polls in a row, show the daemon-down state; do not spam alerts.
+- `refresh()` interval 3 s stays; also refresh immediately when the menu is about to open (`NSMenuDelegate.menuWillOpen`).
 
-## Tasks (in order)
+### 5. About + version
+`About KeepGoing` item (app group, above Quit) → `NSApp.orderFrontStandardAboutPanel` with `Credits` = one line "Open source, MIT. github.com/bigbrainw/keepgoing". Info.plist gets `NSHumanReadableCopyright` already; keep it.
 
-### 1. Build `site/index.html` per brief. Verify: opens locally, no console errors, both colour schemes, 390 px width has no horizontal scroll.
-### 2. Copy-to-clipboard on every `<pre>`/code command (≤ 15 lines of JS, inline).
-### 3. `site/vercel.json` with `{"cleanUrls": true}`; deploy `cd site && vercel --prod --yes`. Commit. Report the URL + a one-line list of anything you had to deviate from in the brief.
+### 6. Build, deploy, verify, report
+Build + deploy. Confirm with `keepgoing status` the daemon is up and the app is running (`pgrep -fl MacOS/KeepGoing`). Paste the final menu as text in your report. List every user-visible string you changed (old → new).
