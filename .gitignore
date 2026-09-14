@@ -1,6 +1,7 @@
 keepgoing
 dist/
 *.log
+app/Users/
 app/icon.iconset/
 app/icon-1024.png
 app/make-icon-bin
