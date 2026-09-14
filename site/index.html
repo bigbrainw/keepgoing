@@ -31,21 +31,39 @@
             <a class="btn btn-primary" href="https://github.com/bigbrainw/keepgoing/releases/latest">Download for macOS</a>
             <a class="btn btn-secondary" href="https://github.com/bigbrainw/keepgoing">GitHub</a>
           </div>
+          <p class="hero-meta">macOS 13+ · free, MIT · 3 MB</p>
         </div>
-        <figure class="shot hero-shot" aria-label="KeepGoing menu bar menu">
-          <div class="mac-bar"><span class="mac-bar-title">KeepGoing</span></div>
-          <div class="mac-menu">
-            <div class="mi dim">KeepGoing 0.1.0</div>
-            <div class="mi-sep"></div>
-            <div class="mi">Agents: claude 13 · codex 4</div>
-            <div class="mi">Sleep: blocked</div>
-            <div class="mi hi">Lid: safe to close</div>
-            <div class="mi">Network: online</div>
-            <div class="mi">Hotspot: iPhone</div>
-            <div class="mi-sep"></div>
-            <div class="mi check">Keep awake with lid closed</div>
-            <div class="mi">Always keep awake</div>
-            <div class="mi">Set hotspot…</div>
+        <figure class="macos-shot" aria-label="KeepGoing menu bar menu">
+          <div aria-hidden="true">
+          <div class="macos-bar">
+            <div class="macos-bar-left"></div>
+            <div class="macos-bar-right">
+              <span class="macos-menubar-icon active"><svg class="icon-bolt" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg></span>
+              <svg class="macos-glyph" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 0 0-6 0zm-4-4l2 2a7.074 7.074 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+              <svg class="macos-glyph" viewBox="0 0 24 24" width="16" height="14" aria-hidden="true"><rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="20" y="10" width="2" height="4" rx="1" fill="currentColor"/><rect x="4" y="9" width="12" height="6" rx="1" fill="currentColor"/></svg>
+              <span class="macos-clock">Mon 14:42</span>
+            </div>
+          </div>
+          <div class="macos-dropdown">
+            <div class="md mi-off">KeepGoing 0.1.0</div>
+            <div class="md-sep"></div>
+            <div class="md mi-off">Agents: claude 13 · codex 4</div>
+            <div class="md mi-off">Sleep: blocked</div>
+            <div class="md mi-amber">Lid: safe to close</div>
+            <div class="md mi-off">Network: online</div>
+            <div class="md mi-off">Hotspot: iPhone</div>
+            <div class="md-sep"></div>
+            <div class="md mi-check">Keep awake with lid closed</div>
+            <div class="md">Always keep awake</div>
+            <div class="md">Set hotspot…</div>
+            <div class="md-sep"></div>
+            <div class="md">Open at login</div>
+            <div class="md">Show log</div>
+            <div class="md">Restart daemon</div>
+            <div class="md-sep"></div>
+            <div class="md">About KeepGoing</div>
+            <div class="md">Quit KeepGoing<span class="md-key">⌘Q</span></div>
+          </div>
           </div>
         </figure>
       </div>
@@ -55,40 +73,63 @@
       <div class="wrap">
         <p class="demo-label" id="demo-label">Try it</p>
         <div class="demo-stage" id="demo-stage">
-          <div class="demo-col">
-            <p class="demo-col-title">Without KeepGoing</p>
-            <div class="phone">
-              <div class="bubble out">Run the tests and fix what breaks</div>
-              <div class="bubble wait left-wait">…</div>
-              <div class="bubble bad left-bad">No reply</div>
+          <div class="scene scene-left">
+            <div class="scene-row">
+              <div class="phone">
+                <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
+                <div class="chat">
+                  <div class="msg msg-out">Run the tests and fix what breaks</div>
+                  <div class="msg msg-in msg-typing">…</div>
+                  <div class="msg msg-in msg-fail">No reply</div>
+                </div>
+              </div>
+              <div class="laptop-stage">
+                <div class="laptop">
+                  <div class="lid">
+                    <div class="lid-bezel">
+                      <div class="notch"></div>
+                      <div class="lid-panel panel-left"></div>
+                    </div>
+                  </div>
+                  <div class="base">
+                    <div class="keyboard"></div>
+                    <div class="trackpad"></div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <svg class="laptop" viewBox="0 0 220 150" aria-hidden="true">
-              <rect class="base" x="20" y="118" width="180" height="10" rx="3" fill="currentColor" opacity=".25"/>
-              <rect class="screen-bg" x="36" y="24" width="148" height="92" rx="4" fill="currentColor" opacity=".12"/>
-              <rect class="screen-left" x="38" y="26" width="144" height="88" rx="3" fill="#1a2332"/>
-              <g class="lid lid-left" transform-origin="110 26">
-                <rect x="34" y="18" width="152" height="10" rx="2" fill="currentColor" opacity=".35"/>
-              </g>
-            </svg>
-            <p class="demo-cap left-cap">macOS sleeps in 67 s.</p>
+            <p class="scene-cap">Without KeepGoing</p>
+            <p class="scene-result left-result">macOS sleeps in 67 s.</p>
           </div>
-          <div class="demo-col">
-            <p class="demo-col-title">With KeepGoing</p>
-            <div class="phone">
-              <div class="bubble out">Run the tests and fix what breaks</div>
-              <div class="bubble good right-good">Done — 3 tests fixed</div>
+          <div class="scene scene-right">
+            <div class="scene-row">
+              <div class="phone">
+                <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
+                <div class="chat">
+                  <div class="msg msg-out">Run the tests and fix what breaks</div>
+                  <div class="msg msg-in msg-typing">…</div>
+                  <div class="msg msg-in msg-ok">Done — 3 tests fixed</div>
+                </div>
+              </div>
+              <div class="laptop-stage">
+                <div class="hinge-glow"></div>
+                <div class="bolt-badge"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg></div>
+                <div class="laptop">
+                  <div class="lid">
+                    <div class="lid-bezel">
+                      <div class="notch"></div>
+                      <div class="lid-panel panel-right"></div>
+                    </div>
+                  </div>
+                  <div class="base">
+                    <div class="keyboard"></div>
+                    <div class="trackpad"></div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <svg class="laptop" viewBox="0 0 220 150" aria-hidden="true">
-              <rect class="base" x="20" y="118" width="180" height="10" rx="3" fill="currentColor" opacity=".25"/>
-              <rect class="screen-bg" x="36" y="24" width="148" height="92" rx="4" fill="currentColor" opacity=".12"/>
-              <rect class="screen-right" x="38" y="26" width="144" height="88" rx="3" fill="#1a2332"/>
-              <rect class="hinge-glow" x="100" y="22" width="20" height="3" rx="1" fill="var(--accent)"/>
-              <text class="menubar-bolt" x="44" y="38" font-size="10" fill="var(--accent)">⚡</text>
-              <g class="lid lid-right" transform-origin="110 26">
-                <rect x="34" y="18" width="152" height="10" rx="2" fill="currentColor" opacity=".35"/>
-              </g>
-            </svg>
-            <p class="demo-cap right-cap">Still running.</p>
+            <p class="scene-cap">With KeepGoing</p>
+            <p class="scene-result right-result">Still running.</p>
           </div>
         </div>
         <button type="button" class="btn btn-primary demo-btn" id="lid-btn">Close the lid</button>
@@ -99,26 +140,39 @@
       <div class="wrap">
         <h2>What it does</h2>
         <div class="feat-row">
-          <figure class="shot feat-shot">
-            <div class="icon-row" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg>
-              <svg viewBox="0 0 24 24" width="28" height="28" opacity=".7"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg>
-              <svg viewBox="0 0 24 24" width="28" height="28" opacity=".55"><path fill="currentColor" d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
-              <svg viewBox="0 0 24 24" width="28" height="28" opacity=".55"><path fill="currentColor" d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 0 0-6 0zm-4-4l2 2a7.074 7.074 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+          <figure class="feat-shot">
+            <div class="icon-states" aria-hidden="true">
+              <div class="icon-state active"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg><span>running</span></div>
+              <div class="icon-state"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg><span>lid will sleep</span></div>
+              <div class="icon-state"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg><span>idle</span></div>
+              <div class="icon-state"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 0 0-6 0zm-4-4l2 2a7.074 7.074 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg><span>offline</span></div>
             </div>
             <figcaption>Watches your agents.</figcaption>
           </figure>
-          <figure class="shot feat-shot alert-shot">
+          <figure class="feat-shot alert-shot">
             <div class="fake-alert">
               <p class="fake-alert-title">Allow KeepGoing to override lid-closed sleep?</p>
               <div class="fake-alert-btns"><span>Install</span><span>Cancel</span></div>
             </div>
             <figcaption>Asks for your password once.</figcaption>
           </figure>
-          <figure class="shot feat-shot">
-            <div class="mac-menu compact">
-              <div class="mi">Network: offline — recovering</div>
-              <div class="mi">Hotspot: iPhone</div>
+          <figure class="feat-shot">
+            <div class="macos-shot macos-shot--compact">
+              <div aria-hidden="true">
+              <div class="macos-bar">
+                <div class="macos-bar-left"></div>
+                <div class="macos-bar-right">
+                  <span class="macos-menubar-icon active"><svg class="icon-bolt" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg></span>
+                  <svg class="macos-glyph macos-glyph-wifi-off" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9z"/><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="2"/></svg>
+                  <svg class="macos-glyph" viewBox="0 0 24 24" width="16" height="14" aria-hidden="true"><rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="20" y="10" width="2" height="4" rx="1" fill="currentColor"/><rect x="4" y="9" width="12" height="6" rx="1" fill="currentColor"/></svg>
+                  <span class="macos-clock">Mon 14:42</span>
+                </div>
+              </div>
+              <div class="macos-dropdown">
+                <div class="md mi-off">Network: offline — recovering</div>
+                <div class="md mi-off">Hotspot: iPhone</div>
+              </div>
+              </div>
             </div>
             <figcaption>Rejoins Wi-Fi or your hotspot.</figcaption>
           </figure>
@@ -136,7 +190,7 @@
               <pre><code>xattr -d com.apple.quarantine /Applications/KeepGoing.app</code></pre>
             </div>
           </li>
-          <li>Click ⚡ → <strong>Keep awake with lid closed</strong>.</li>
+          <li>Click <svg class="icon-bolt inline" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg> → <strong>Keep awake with lid closed</strong>.</li>
         </ol>
       </div>
     </section>
