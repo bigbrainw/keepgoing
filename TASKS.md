@@ -49,3 +49,13 @@ Deploy per rule. `keepgoing status` shows `version`. Report: repo URL, draft rel
 - Push notify (ntfy.sh) when offline > 3 min or hotspot join fails.
 - Landing page (one static HTML) with the two GIFs: lid close + phone.
 - Linux support.
+
+## Phase 2.1 — fixes from review (do these now, in order)
+
+### A. build.sh must not mutate source, and must handle absolute OUT
+- `app/build.sh` runs PlistBuddy on `app/Info.plist` (source) → dirty tree after every build. Copy `Info.plist` into the bundle first, then PlistBuddy the copy.
+- When `OUT` is absolute (release.sh passes one), `( cd .. && go build -o "app/$APP/..." )` creates `app/Users/...` — a stray 5 MB binary is now in the tree. Resolve `APP` to an absolute path once (`APP=$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")/KeepGoing.app` after `mkdir -p`) and use it everywhere.
+- `rm -rf app/Users`, `git checkout app/Info.plist`, add `app/Users/` to `.gitignore` as a guard.
+- Verify: `./app/build.sh && ./scripts/release.sh` both leave `git status --short` empty (except `dist/`, which is ignored).
+
+### B. Commit as `fix: build.sh keeps source clean, absolute OUT` and report.
