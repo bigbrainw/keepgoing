@@ -1,0 +1,76 @@
+// Package lid keeps the Mac running with the lid closed by toggling
+// `pmset disablesleep` — the only userspace switch that overrides clamshell
+// sleep. It needs root, so a one-time sudoers rule is installed that allows
+// exactly two commands without a password.
+package lid
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+	"time"
+)
+
+// SudoersPath is the drop-in file the installer writes.
+const SudoersPath = "/etc/sudoers.d/keepgoing"
+
+// Sudoers is the rule: admins may run the two exact pmset commands.
+const Sudoers = `# keepgoing: let the daemon keep the Mac awake with the lid closed.
+# Only these two exact commands, nothing else.
+%admin ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0
+`
+
+// InstallScript is the shell run as root (via sudo or an admin prompt).
+// visudo -c validates before the file goes live.
+var InstallScript = fmt.Sprintf(`set -e
+umask 077
+tmp=$(mktemp)
+printf '%%s' %q > "$tmp"
+/usr/sbin/visudo -cf "$tmp" >/dev/null
+install -m 0440 -o root -g wheel "$tmp" %s
+rm -f "$tmp"
+echo installed %s`, Sudoers, SudoersPath, SudoersPath)
+
+// UninstallScript removes the rule and re-enables sleep.
+var UninstallScript = fmt.Sprintf(`rm -f %s; /usr/bin/pmset -a disablesleep 0; echo removed`, SudoersPath)
+
+// Available reports whether the passwordless rule works right now.
+func Available() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, "sudo", "-n", "-l", "/usr/bin/pmset", "-a", "disablesleep", "1").Run() == nil
+}
+
+// SleepDisabled reads the live pmset state.
+func SleepDisabled() bool {
+	out, err := exec.Command("pmset", "-g").Output()
+	if err != nil {
+		return false
+	}
+	for _, ln := range strings.Split(string(out), "\n") {
+		f := strings.Fields(ln)
+		if len(f) == 2 && f[0] == "SleepDisabled" {
+			return f[1] == "1"
+		}
+	}
+	return false
+}
+
+// Set flips disablesleep. No-op if already in the requested state.
+func Set(disable bool) error {
+	if SleepDisabled() == disable {
+		return nil
+	}
+	v := "0"
+	if disable {
+		v = "1"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "sudo", "-n", "/usr/bin/pmset", "-a", "disablesleep", v).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("pmset disablesleep %s: %v %s", v, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}

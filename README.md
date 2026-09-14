@@ -1,0 +1,90 @@
+# keepgoing
+
+Keeps your Mac **awake** and **online** while coding agents run, so remote
+control from your phone (Claude Code remote control, Codex remote control,
+Cursor) keeps working when you're away from the desk.
+
+You launch agents however you already do. keepgoing is a background daemon
+that only makes sure the machine and the Wi-Fi stay up while they're alive.
+
+## The app
+
+`KeepGoing.app` — menu bar icon. ⚡ = agents running, sleep blocked · 💤 = idle, sleep allowed · wifi-slash = offline, recovering.
+Menu: agents / sleep / network / hotspot state, **Always keep awake**, **Set hotspot…** (SSID + password → Keychain), restart daemon, open log, open at login.
+
+```
+./app/build.sh                      # → dist/KeepGoing.app (Swift UI + bundled Go daemon)
+cp -R dist/KeepGoing.app ~/Applications/ && open ~/Applications/KeepGoing.app
+```
+
+First launch installs the launchd daemon from the bundled `keepgoing-cli` if it isn't registered.
+CLI-only use works too:
+
+```
+keepgoing install            # launchd: runs at login, restarts if it dies
+keepgoing hotspot set MyiPhone   # optional: auto-join hotspot when Wi-Fi is gone
+keepgoing status
+```
+
+## What the daemon does
+
+| Concern | Behaviour |
+|---|---|
+| Sleep | Scans processes every 5s for `claude`, `codex`, `cursor-agent`/`agent`, and the Codex `app-server` that ChatGPT.app / Codex desktop run threads in (counted while the app is open — phone remote control needs it reachable; quit the app to let the Mac sleep). Any alive → `caffeinate -dims` assertion. None for `-idle-grace` (5m) → released, battery back to normal. `-always` to hold unconditionally. |
+| Wi-Fi | Probes `api.anthropic.com`, `api.openai.com`, `chatgpt.com` every 3s. Offline ≥ 20s → bounce Wi-Fi radio. Still offline 45s later → `networksetup -setairportnetwork` to the configured hotspot (password from login Keychain). Alternates, 45s backoff, resets when online. |
+| Tokens (optional) | Holding proxy on `127.0.0.1:7777` (HTTP) and `:7778` (CONNECT). Export the env below and requests are *parked* while offline instead of failing → no SDK retries, no re-sent context. |
+
+Optional proxy wiring (`keepgoing env`):
+
+```
+export ANTHROPIC_BASE_URL=http://127.0.0.1:7777/anthropic   # claude code
+export API_TIMEOUT_MS=3600000
+export HTTPS_PROXY=http://127.0.0.1:7778 NO_PROXY=localhost,127.0.0.1,::1   # codex (wss hard-coded → CONNECT)
+```
+
+## Commands
+
+```
+keepgoing install / uninstall
+keepgoing status                       JSON: agents, awake, online, wifi, proxy stats
+keepgoing hotspot set <SSID>           password → Keychain (service keepgoing-hotspot)
+keepgoing daemon [flags]               foreground; -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake
+keepgoing run [flags] -- <agent cmd>   optional wrapper: proxy + awake + resume-on-crash for one headless agent
+keepgoing env [-agent claude|codex]
+```
+
+Bundle note: the Go binary is `keepgoing-cli` inside the .app because APFS is case-insensitive and `keepgoing` would collide with the `KeepGoing` executable.
+
+Config: `~/.config/keepgoing/config.json` (hotspot SSID, ports, always_awake).
+Log: `~/Library/Logs/keepgoing/daemon.log`.
+
+## Verified (2026-09-14, macOS 26, Claude Code 2.1.270, Codex 0.152.1)
+
+- Daemon: detects sessions, `pmset -g assertions` shows the caffeinate assertion, released after idle grace.
+- Wi-Fi keeper: forced offline 75s → bounce at +24s, second action at +74s (dry-run), reset on online.
+- Holding proxy: Claude Code forced offline 8s → 3 requests parked, released, turn completed, no error seen by agent. Codex via CONNECT tunnel: held 7s, completed.
+- Wrapper resume: `kill -9` on Claude mid-task → `claude -p --continue`, remaining steps finished.
+
+## Limits
+
+- **Lid closed on battery = sleep.** Not fixable from userspace. Plug in (clamshell), or `sudo pmset -a disablesleep 1` (laptop stays warm in a bag).
+- **Hotspot join needs the phone's hotspot on.** macOS can't wake it. Set iPhone → Personal Hotspot → Allow Others to Join, and Mac → Wi-Fi → Ask to join hotspots → Automatically; keepgoing's forced join is the fallback.
+- `wifi_ssid` in status shows `<redacted>` on macOS 26 (system privacy), not a bug.
+- Codex hold is at CONNECT time only (TLS is opaque); a drop mid-turn relies on Codex's own reconnect.
+- `/_force?offline=…` is a loopback debug switch with no auth.
+
+## Build (CLI only)
+
+Go 1.21+. On macOS 26 with Go 1.21 use the external linker (internal linker omits `LC_UUID`):
+
+```
+go build -ldflags=-linkmode=external -o keepgoing . && codesign -s - -f keepgoing
+cp keepgoing ~/.local/bin/ && keepgoing install
+```
+
+## Roadmap
+
+- Notarised/signed .app + dmg (currently ad-hoc signed; Gatekeeper will complain on other Macs).
+- Push (ntfy/Pushover) when offline > N min or hotspot join fails.
+- Cursor CLI proxy adapter; Linux (`systemd-inhibit` + `nmcli`).
+- brew formula; signed .app.
