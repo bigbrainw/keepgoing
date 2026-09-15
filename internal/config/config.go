@@ -13,8 +13,9 @@ type Config struct {
 	HotspotSSID string `json:"hotspot_ssid,omitempty"`
 	Listen      string `json:"listen,omitempty"`
 	Connect     string `json:"connect,omitempty"`
-	AlwaysAwake bool   `json:"always_awake,omitempty"`
-	LidMode     bool   `json:"lid_mode,omitempty"` // keep running with lid closed (needs sudoers rule)
+	AlwaysAwake    bool `json:"always_awake,omitempty"`
+	LidMode        bool `json:"lid_mode,omitempty"`         // keep running with lid closed (needs sudoers rule)
+	ScreenOffAfter int  `json:"screen_off_after,omitempty"` // seconds idle before display off; 0 = disabled
 }
 
 // Path returns ~/.config/keepgoing/config.json.

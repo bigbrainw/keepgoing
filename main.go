@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"github.com/elijah/keepgoing/internal/procwatch"
 	"github.com/elijah/keepgoing/internal/proxy"
 	"github.com/elijah/keepgoing/internal/runner"
+	"github.com/elijah/keepgoing/internal/screen"
 	"github.com/elijah/keepgoing/internal/tunnel"
 	"github.com/elijah/keepgoing/internal/wifi"
 )
@@ -109,6 +111,8 @@ func main() {
 		os.Exit(cmdHotspot(fs.Args(), saved))
 	case "lid":
 		os.Exit(cmdLid(fs.Args(), saved))
+	case "screen":
+		os.Exit(cmdScreen(fs.Args(), saved))
 	case "run":
 		if len(cmd) == 0 {
 			fmt.Fprintln(os.Stderr, "keepgoing run: missing command after --")
@@ -147,6 +151,7 @@ func usage() {
   keepgoing version                 print release version
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
   keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
+  keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
   keepgoing run [flags] -- claude -p "task" --dangerously-skip-permissions
@@ -234,6 +239,8 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var lastSeen time.Time
 	var procs []procwatch.Proc
 	awakeSince := time.Time{}
+	var screenFired bool
+	var lastIdle float64
 
 	// lid mode: flip pmset disablesleep together with the awake assertion.
 	lidOK := saved.LidMode && lid.Available()
@@ -267,6 +274,8 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			"lid_mode":       saved.LidMode,
 			"lid_ready":      lidOK,
 			"sleep_disabled": lid.SleepDisabled(),
+			"screen_off_after": saved.ScreenOffAfter,
+			"idle_seconds":     lastIdle,
 		}
 		if holder != nil {
 			m["awake_since"] = awakeSince.Format(time.RFC3339)
@@ -317,6 +326,22 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		case !want && holder != nil:
 			log.Printf("[daemon] no agents for %s, releasing sleep inhibit", c.idleGrace)
 			release()
+		}
+		if idle, err := screen.IdleSeconds(); err != nil {
+			log.Printf("[screen] idle: %v", err)
+		} else {
+			lastIdle = idle
+			threshold := float64(saved.ScreenOffAfter)
+			if idle < threshold {
+				screenFired = false
+			} else if screen.ShouldSleep(holder != nil, idle, threshold, screenFired) {
+				if err := screen.SleepNow(); err != nil {
+					log.Printf("[screen] displaysleepnow: %v", err)
+				} else {
+					log.Printf("[screen] display off after %.0fs idle", idle)
+					screenFired = true
+				}
+			}
 		}
 		if wk != nil {
 			var since time.Time
@@ -401,6 +426,44 @@ func cmdLid(args []string, saved config.Config) int {
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, "unknown lid subcommand:", args[0])
+	return 2
+}
+
+// ---- screen ---------------------------------------------------------------
+
+func cmdScreen(args []string, saved config.Config) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing screen off-after <seconds|0> | status")
+		return 2
+	}
+	switch args[0] {
+	case "off-after":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: keepgoing screen off-after <seconds|0>")
+			return 2
+		}
+		n, err := strconv.Atoi(args[1])
+		if err != nil || n < 0 {
+			fmt.Fprintln(os.Stderr, "seconds must be a non-negative integer")
+			return 2
+		}
+		saved.ScreenOffAfter = n
+		if err := config.Save(saved); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		if n == 0 {
+			fmt.Println("screen off when idle: disabled")
+		} else {
+			fmt.Printf("screen off when idle: %ds\n", n)
+		}
+		return 0
+	case "status":
+		fmt.Printf("screen_off_after=%d\n", saved.ScreenOffAfter)
+		return 0
+	}
+	fmt.Fprintln(os.Stderr, "unknown screen subcommand:", args[0])
 	return 2
 }
 
