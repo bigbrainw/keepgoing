@@ -11,7 +11,7 @@
   --code-bg: #eef1f6;
   --mac-bar: rgba(228, 232, 238, 0.94);
   --mac-menu: #f8f9fb;
-  --mac-row: rgba(26, 35, 50, 0.55);
+  --mac-row: rgba(26, 35, 50, 0.78);
   --im-blue: #2f6fed;
   --im-green: #1f7a4d;
   --laptop-base: #d4d8de;
@@ -32,7 +32,7 @@
     --code-bg: #0c1016;
     --mac-bar: rgba(34, 40, 50, 0.94);
     --mac-menu: #1c222c;
-    --mac-row: rgba(231, 236, 243, 0.55);
+    --mac-row: rgba(231, 236, 243, 0.78);
     --laptop-base: #c8ccd2;
     --laptop-lid: #141820;
   }
