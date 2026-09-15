@@ -17,6 +17,16 @@ type Proc struct {
 	WorkingSince time.Time `json:"working_since"`
 }
 
+// AnyWorking reports whether any proc is working.
+func AnyWorking(p []Proc) bool {
+	for _, x := range p {
+		if x.Working {
+			return true
+		}
+	}
+	return false
+}
+
 // Summary returns working/idle counts per kind, e.g. "claude 2 working · 12 idle".
 func Summary(p []Proc) string {
 	if len(p) == 0 {

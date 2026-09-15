@@ -272,6 +272,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var thermalWarned string
 	var lastThermalLogged string
 	var lastLogAt time.Time
+	var allIdleSince time.Time
 	lidClosed := lid.Closed()
 	coolMgr := cool.New()
 	coolOn := saved.LidMode && saved.CoolOn()
@@ -330,8 +331,9 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			"cool_mode":      coolOn,
 			"low_power":      lid.LowPowerMode(),
 			"cool_pids":      coolMgr.PIDCount(),
-			"screen_off_after": saved.ScreenOffAfter,
-			"idle_seconds":     lastIdle,
+			"screen_off_after":   saved.ScreenOffAfter,
+			"idle_sleep_after":   saved.IdleSleepAfter,
+			"idle_seconds":       lastIdle,
 		}
 		if holder != nil {
 			m["awake_since"] = awakeSince.Format(time.RFC3339)
@@ -399,7 +401,19 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		if len(ps) > 0 {
 			lastSeen = time.Now()
 		}
-		want := !c.noAwake && (c.always || (!lastSeen.IsZero() && time.Since(lastSeen) < c.idleGrace))
+		idleSleep := saved.IdleSleepAfter > 0 && len(ps) > 0
+		if idleSleep {
+			if procwatch.AnyWorking(ps) {
+				allIdleSince = time.Time{}
+			} else if allIdleSince.IsZero() {
+				allIdleSince = time.Now()
+			}
+		} else {
+			allIdleSince = time.Time{}
+		}
+		idleSleepRelease := idleSleep && !allIdleSince.IsZero() &&
+			time.Since(allIdleSince) >= time.Duration(saved.IdleSleepAfter)*time.Minute
+		want := !c.noAwake && (c.always || (len(ps) > 0 && !idleSleepRelease && (!lastSeen.IsZero() && time.Since(lastSeen) < c.idleGrace)))
 		switch {
 		case want && holder == nil:
 			holder = awake.Hold()
@@ -408,7 +422,11 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		case want && holder != nil && lidOK && !lid.SleepDisabled():
 			setLid(true) // someone flipped it back; reassert while agents run
 		case !want && holder != nil:
-			log.Printf("[daemon] no agents for %s, releasing sleep inhibit", c.idleGrace)
+			if idleSleepRelease {
+				log.Printf("[daemon] all agents idle for %dm, allowing sleep", saved.IdleSleepAfter)
+			} else {
+				log.Printf("[daemon] no agents for %s, releasing sleep inhibit", c.idleGrace)
+			}
 			release()
 		}
 		if idle, err := screen.IdleSeconds(); err != nil {

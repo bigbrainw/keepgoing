@@ -50,7 +50,8 @@ keepgoing status
 
 | Concern | Behaviour |
 |---|---|
-| Sleep | Scans processes every 5s for `claude`, `codex`, `cursor-agent`/`agent`, and the Codex `app-server` that ChatGPT.app / Codex desktop run threads in (counted while the app is open — phone remote control needs it reachable; quit the app to let the Mac sleep). Any alive → `caffeinate -ims` assertion (system sleep blocked, display may sleep). None for `-idle-grace` (5m) → released, battery back to normal. `-always` to hold unconditionally. |
+| Sleep | Scans processes every 5s for `claude`, `codex`, `cursor-agent`/`agent`, and the Codex `app-server` that ChatGPT.app / Codex desktop run threads in (counted while the app is open — phone remote control needs it reachable; quit the app to let the Mac sleep). Any alive → `caffeinate -ims` assertion (system sleep blocked, display may sleep). None for `-idle-grace` (5m) → released, battery back to normal. `-always` to hold unconditionally. Optional: **Allow sleep when agents are idle 30 min** releases the assertion when every session has been idle that long — an asleep Mac cannot receive your next phone message until something wakes it. |
+| Working | CPU-time delta over each agent's process tree, plus opt-in signals from `keepgoing hooks install` (Claude Code hooks, Codex notify) and cmux workspace status. Menu shows `claude 2 working · 12 idle`. |
 | Screen | While agents run and you haven't touched the Mac for 2 min, the display sleeps (`pmset displaysleepnow`). The system stays awake. Off by default; menu → Turn off screen when idle. |
 | Heat | Lid closed → Low Power Mode + agents moved to efficiency cores; restored when the lid opens. Thermal state shown in the menu; notification at serious. |
 | Wi-Fi | Probes `api.anthropic.com`, `api.openai.com`, `chatgpt.com` every 3s. Offline ≥ 20s → bounce Wi-Fi radio. Still offline 45s later → `networksetup -setairportnetwork` to the configured hotspot (password from login Keychain). Alternates, 45s backoff, resets when online. |
@@ -93,6 +94,7 @@ keepgoing hotspot set <SSID>           password → Keychain (service keepgoing-
 keepgoing lid enable|disable|status    keep running with the lid closed (one-time sudoers rule)
 keepgoing cool on|off|status           run cooler with the lid closed
 keepgoing thermal [--csv]              last 20 lid/thermal/CPU samples
+keepgoing hooks install|uninstall|status   opt-in Claude/Codex working-idle hooks
 keepgoing screen off-after <seconds|0>   turn display off after idle while agents run
 keepgoing daemon [flags]               foreground; -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake
 keepgoing run [flags] -- <agent cmd>   optional wrapper: proxy + awake + resume-on-crash for one headless agent

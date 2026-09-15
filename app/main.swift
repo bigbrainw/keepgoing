@@ -16,6 +16,7 @@ struct Status {
     var sleepDisabled = false
     var coolMode = false
     var screenOffAfter = 0
+    var idleSleepAfter = 0
     var hotspot = ""
     var thermal = ""
     var cpuC: Double?
@@ -39,6 +40,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var renderedThermal = ""
     var renderedAlways = false
     var renderedScreenOff = false
+    var renderedIdleSleep = false
     var renderedLidToggle = false
     var renderedCoolToggle = false
     var renderedLogin = false
@@ -59,6 +61,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let coolToggleItem = NSMenuItem(title: "Run cooler with lid closed", action: #selector(toggleCool), keyEquivalent: "")
     let alwaysItem = NSMenuItem(title: "Always keep awake", action: #selector(toggleAlways), keyEquivalent: "")
     let screenOffItem = NSMenuItem(title: "Turn off screen when idle", action: #selector(toggleScreenOff), keyEquivalent: "")
+    let idleSleepItem = NSMenuItem(title: "Allow sleep when agents are idle 30 min", action: #selector(toggleIdleSleep), keyEquivalent: "")
     let hotspotActionItem = NSMenuItem(title: "Set hotspot…", action: #selector(setHotspot), keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleLogin), keyEquivalent: "")
     let logItem = NSMenuItem(title: "Show log", action: #selector(openLog), keyEquivalent: "l")
@@ -95,11 +98,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         coolToggleItem.target = self
         alwaysItem.target = self
         screenOffItem.target = self
+        idleSleepItem.target = self
         hotspotActionItem.target = self
         menu.addItem(lidToggleItem)
         menu.addItem(coolToggleItem)
         menu.addItem(alwaysItem)
         menu.addItem(screenOffItem)
+        menu.addItem(idleSleepItem)
         menu.addItem(hotspotActionItem)
         menu.addItem(.separator())
         loginItem.target = self
@@ -145,6 +150,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 s.sleepDisabled = j["sleep_disabled"] as? Bool ?? false
                 s.coolMode = j["cool_mode"] as? Bool ?? false
                 s.screenOffAfter = j["screen_off_after"] as? Int ?? 0
+                s.idleSleepAfter = j["idle_sleep_after"] as? Int ?? 0
                 s.hotspot = j["hotspot"] as? String ?? ""
                 s.thermal = j["thermal"] as? String ?? ""
                 s.cpuC = j["cpu_c"] as? Double
@@ -190,6 +196,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             setCheck(coolToggleItem, s.coolMode, store: &renderedCoolToggle)
             setCheck(alwaysItem, s.always, store: &renderedAlways)
             setCheck(screenOffItem, s.screenOffAfter > 0, store: &renderedScreenOff)
+            setCheck(idleSleepItem, s.idleSleepAfter > 0, store: &renderedIdleSleep)
         } else {
             setTitle(versionItem, to: "Daemon not running", store: &renderedVersion)
             for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] { it.isHidden = true }
@@ -389,6 +396,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func toggleScreenOff() {
         let enabling = status.screenOffAfter == 0
         run([cli, "screen", "off-after", enabling ? "120" : "0"])
+        restartDaemon()
+    }
+
+    @objc func toggleIdleSleep() {
+        setConfigKey("idle_sleep_after", value: status.idleSleepAfter == 0 ? 30 : 0)
         restartDaemon()
     }
 
