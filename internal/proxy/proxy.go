@@ -60,6 +60,7 @@ type Server struct {
 	thermalMu    sync.RWMutex
 	thermalState string
 	thermalSince time.Time
+	cpuC         *float64
 }
 
 // New builds a Server. holdMax bounds how long a request may be parked.
@@ -111,22 +112,30 @@ func (s *Server) StatsSnapshot() Stats {
 	}
 }
 
-// SetThermal stores the latest thermal state from the menu bar app.
-func (s *Server) SetThermal(state string) {
+// SetThermal stores the latest thermal state and optional CPU °C from the app.
+func (s *Server) SetThermal(state string, cpuC *float64) {
 	s.thermalMu.Lock()
-	if state != s.thermalState {
+	if state != "" && state != s.thermalState {
 		s.thermalState = state
 		s.thermalSince = time.Now()
+	}
+	if cpuC != nil {
+		v := *cpuC
+		s.cpuC = &v
 	}
 	s.thermalMu.Unlock()
 }
 
-// ThermalSnapshot returns the stored thermal state and when it last changed.
-func (s *Server) ThermalSnapshot() (state string, since time.Time) {
+// ThermalSnapshot returns the stored thermal state, CPU °C, and when state last changed.
+func (s *Server) ThermalSnapshot() (state string, since time.Time, cpuC *float64) {
 	s.thermalMu.RLock()
 	state, since = s.thermalState, s.thermalSince
+	if s.cpuC != nil {
+		v := *s.cpuC
+		cpuC = &v
+	}
 	s.thermalMu.RUnlock()
-	return state, since
+	return state, since, cpuC
 }
 
 func (s *Server) thermal(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +144,8 @@ func (s *Server) thermal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		State string `json:"state"`
+		State string   `json:"state"`
+		CPUC  *float64 `json:"cpu_c"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad json", http.StatusBadRequest)
@@ -143,7 +153,7 @@ func (s *Server) thermal(w http.ResponseWriter, r *http.Request) {
 	}
 	switch body.State {
 	case "nominal", "fair", "serious", "critical":
-		s.SetThermal(body.State)
+		s.SetThermal(body.State, body.CPUC)
 	default:
 		http.Error(w, "invalid state", http.StatusBadRequest)
 		return
@@ -165,10 +175,13 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 			m[k] = v
 		}
 	}
-	if state, since := s.ThermalSnapshot(); state != "" {
+	if state, since, cpuC := s.ThermalSnapshot(); state != "" {
 		m["thermal"] = state
 		if !since.IsZero() {
 			m["thermal_since"] = since.Format(time.RFC3339)
+		}
+		if cpuC != nil {
+			m["cpu_c"] = *cpuC
 		}
 	}
 	_ = json.NewEncoder(w).Encode(m)

@@ -10,7 +10,7 @@ if [[ ! -f AppIcon.icns ]]; then
   ./make-icon.sh
 fi
 ( cd .. && go build -ldflags="-linkmode=external -X main.version=${VERSION}" -o "$APP/Contents/MacOS/keepgoing-cli" . )
-swiftc -O -framework Cocoa -framework ServiceManagement -framework UserNotifications -o "$APP/Contents/MacOS/KeepGoing" main.swift
+swiftc -O -framework Cocoa -framework ServiceManagement -framework UserNotifications -framework IOKit -o "$APP/Contents/MacOS/KeepGoing" main.swift SMC.swift
 cp Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$APP/Contents/Info.plist"

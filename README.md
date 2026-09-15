@@ -92,6 +92,7 @@ keepgoing status                       JSON: agents, awake, online, wifi, proxy 
 keepgoing hotspot set <SSID>           password → Keychain (service keepgoing-hotspot)
 keepgoing lid enable|disable|status    keep running with the lid closed (one-time sudoers rule)
 keepgoing cool on|off|status           run cooler with the lid closed
+keepgoing thermal [--csv]              last 20 lid/thermal/CPU samples
 keepgoing screen off-after <seconds|0>   turn display off after idle while agents run
 keepgoing daemon [flags]               foreground; -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake
 keepgoing run [flags] -- <agent cmd>   optional wrapper: proxy + awake + resume-on-crash for one headless agent

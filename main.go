@@ -34,10 +34,12 @@ import (
 	"github.com/elijah/keepgoing/internal/cool"
 	"github.com/elijah/keepgoing/internal/lid"
 	"github.com/elijah/keepgoing/internal/netwatch"
+	"github.com/elijah/keepgoing/internal/power"
 	"github.com/elijah/keepgoing/internal/procwatch"
 	"github.com/elijah/keepgoing/internal/proxy"
 	"github.com/elijah/keepgoing/internal/runner"
 	"github.com/elijah/keepgoing/internal/screen"
+	"github.com/elijah/keepgoing/internal/thermolog"
 	"github.com/elijah/keepgoing/internal/tunnel"
 	"github.com/elijah/keepgoing/internal/wifi"
 )
@@ -122,6 +124,8 @@ func main() {
 		os.Exit(cmdLid(fs.Args(), saved))
 	case "cool":
 		os.Exit(cmdCool(fs.Args(), saved))
+	case "thermal":
+		os.Exit(cmdThermal(fs.Args()))
 	case "screen":
 		os.Exit(cmdScreen(fs.Args(), saved))
 	case "run":
@@ -163,6 +167,7 @@ func usage() {
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
   keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
   keepgoing cool on|off|status   run cooler with the lid closed (Low Power Mode + efficiency cores)
+  keepgoing thermal [--csv]      last 20 lid/thermal/CPU samples (or CSV path)
   keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
@@ -254,6 +259,8 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var screenFired bool
 	var lastIdle float64
 	var thermalWarned string
+	var lastThermalLogged string
+	var lastLogAt time.Time
 	lidClosed := lid.Closed()
 	coolMgr := cool.New()
 	coolOn := saved.LidMode && saved.CoolOn()
@@ -323,7 +330,30 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			m["wifi_ssid"] = wk.SSID()
 			m["hotspot"] = saved.HotspotSSID
 		}
+		if _, _, cpuC := co.px.ThermalSnapshot(); cpuC != nil {
+			m["cpu_c"] = *cpuC
+		}
 		return m
+	}
+
+	appendThermalLog := func() {
+		thermal, _, cpuC := co.px.ThermalSnapshot()
+		if thermal == "" {
+			thermal = "unknown"
+		}
+		if err := thermolog.Append(thermolog.Row{
+			LidClosed: lidClosed,
+			Thermal:   thermal,
+			CPUC:      cpuC,
+			LowPower:  lid.LowPowerMode(),
+			CoolPIDs:  coolMgr.PIDCount(),
+			Agents:    procwatch.Summary(procs),
+			OnBattery: power.OnBattery(),
+		}); err != nil {
+			log.Printf("[thermal] log: %v", err)
+		}
+		lastLogAt = time.Now()
+		lastThermalLogged = thermal
 	}
 
 	release := func() {
@@ -391,6 +421,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			}
 			wk.Tick(ctx, co.nw.Online(), since)
 		}
+		thermalLogged := false
 		nowClosed := lid.Closed()
 		if nowClosed != lidClosed {
 			if nowClosed {
@@ -405,17 +436,27 @@ func cmdDaemon(c cfg, saved config.Config) int {
 				}
 			}
 			lidClosed = nowClosed
+			appendThermalLog()
+			thermalLogged = true
 		}
 		if coolOn {
 			coolMgr.Tick(ps, lidClosed, coolOn)
 		}
-		if state, _ := co.px.ThermalSnapshot(); state == "serious" || state == "critical" {
-			if state != thermalWarned {
-				log.Printf("[thermal] %s", state)
-				thermalWarned = state
+		thermal, _, _ := co.px.ThermalSnapshot()
+		if !thermalLogged && thermal != "" && thermal != lastThermalLogged {
+			appendThermalLog()
+			thermalLogged = true
+		}
+		if thermal == "serious" || thermal == "critical" {
+			if thermal != thermalWarned {
+				log.Printf("[thermal] %s", thermal)
+				thermalWarned = thermal
 			}
 		} else {
 			thermalWarned = ""
+		}
+		if !thermalLogged && (lastLogAt.IsZero() || time.Since(lastLogAt) >= 30*time.Second) {
+			appendThermalLog()
 		}
 		select {
 		case <-ctx.Done():
@@ -545,6 +586,24 @@ func cmdCool(args []string, saved config.Config) int {
 	}
 	fmt.Fprintln(os.Stderr, "unknown cool subcommand:", args[0])
 	return 2
+}
+
+// ---- thermal ---------------------------------------------------------------
+
+func cmdThermal(args []string) int {
+	for _, a := range args {
+		if a == "--csv" {
+			fmt.Println(thermolog.Path())
+			return 0
+		}
+	}
+	lines, err := thermolog.LastLines(20)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Print(thermolog.FormatTable(lines))
+	return 0
 }
 
 // ---- screen ---------------------------------------------------------------

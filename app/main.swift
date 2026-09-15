@@ -18,6 +18,7 @@ struct Status {
     var screenOffAfter = 0
     var hotspot = ""
     var thermal = ""
+    var cpuC: Double?
     var reachable = false
 }
 
@@ -45,6 +46,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var renderedRestartHidden = false
     var thermalNotified = false
     var thermalTimer: Timer?
+    let smc = SMCReader()
 
     let versionItem = NSMenuItem()
     let agentsItem = NSMenuItem()
@@ -60,6 +62,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let hotspotActionItem = NSMenuItem(title: "Set hotspot…", action: #selector(setHotspot), keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleLogin), keyEquivalent: "")
     let logItem = NSMenuItem(title: "Show log", action: #selector(openLog), keyEquivalent: "l")
+    let thermalLogItem = NSMenuItem(title: "Show thermal log", action: #selector(openThermalLog), keyEquivalent: "")
     let startDaemonItem = NSMenuItem(title: "Start daemon", action: #selector(startDaemon), keyEquivalent: "")
     let restartItem = NSMenuItem(title: "Restart daemon", action: #selector(restartDaemon), keyEquivalent: "")
     let aboutItem = NSMenuItem(title: "About KeepGoing", action: #selector(showAbout), keyEquivalent: "")
@@ -101,10 +104,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         loginItem.target = self
         logItem.target = self
+        thermalLogItem.target = self
         startDaemonItem.target = self
         restartItem.target = self
         menu.addItem(loginItem)
         menu.addItem(logItem)
+        menu.addItem(thermalLogItem)
         startDaemonItem.isHidden = true
         menu.addItem(startDaemonItem)
         menu.addItem(restartItem)
@@ -142,6 +147,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 s.screenOffAfter = j["screen_off_after"] as? Int ?? 0
                 s.hotspot = j["hotspot"] as? String ?? ""
                 s.thermal = j["thermal"] as? String ?? ""
+                s.cpuC = j["cpu_c"] as? Double
             }
             DispatchQueue.main.async {
                 if s.reachable {
@@ -178,7 +184,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             setTitle(lidItem, to: lidStatus(s), store: &renderedLid)
             setTitle(netItem, to: s.online ? "Network: online" : "Network: offline — recovering", store: &renderedNetwork)
             setTitle(hotspotItem, to: s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)", store: &renderedHotspot)
-            setTitle(thermalItem, to: "Thermal: \(s.thermal.isEmpty ? "—" : s.thermal)", store: &renderedThermal)
+            setTitle(thermalItem, to: formatThermal(s), store: &renderedThermal)
             setCheck(lidToggleItem, s.lidMode, store: &renderedLidToggle)
             coolToggleItem.isEnabled = s.lidMode
             setCheck(coolToggleItem, s.coolMode, store: &renderedCoolToggle)
@@ -243,6 +249,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    func formatThermal(_ s: Status) -> String {
+        let state = s.thermal.isEmpty ? "—" : s.thermal
+        if let c = s.cpuC {
+            return String(format: "Thermal: %@ · %.0f °C", state, c)
+        }
+        return "Thermal: \(state)"
+    }
+
     func thermalName() -> String {
         switch ProcessInfo.processInfo.thermalState {
         case .nominal: return "nominal"
@@ -270,10 +284,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func reportThermal() {
         let state = thermalName()
+        var body: [String: Any] = ["state": state]
+        if let c = smc?.cpuCelsius() {
+            body["cpu_c"] = c
+        } else {
+            body["cpu_c"] = NSNull()
+        }
         var req = URLRequest(url: URL(string: "http://127.0.0.1:7777/_thermal")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["state": state])
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         URLSession.shared.dataTask(with: req).resume()
 
         if state == "serious" || state == "critical" {
@@ -532,6 +552,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func openLog() {
         NSWorkspace.shared.open(URL(fileURLWithPath: NSHomeDirectory() + "/Library/Logs/keepgoing/daemon.log"))
+    }
+
+    @objc func openThermalLog() {
+        let path = NSHomeDirectory() + "/Library/Logs/keepgoing/thermal.csv"
+        let url = URL(fileURLWithPath: path)
+        if !FileManager.default.fileExists(atPath: path) {
+            let hdr = "ts_iso,lid_closed,thermal_state,cpu_c,low_power,cool_pids,agents,on_battery\n"
+            FileManager.default.createFile(atPath: path, contents: Data(hdr.utf8))
+        }
+        NSWorkspace.shared.open(url)
     }
 
     @objc func toggleLogin() {
