@@ -33,3 +33,12 @@ Under "Always keep awake": checkbox **Turn off screen when idle** (state = `scre
 One paragraph in the daemon table: "Screen: while agents run and you haven't touched the Mac for 2 min, the display sleeps (`pmset displaysleepnow`). The system stays awake. Off by default; menu → Turn off screen when idle."
 
 ### 5. Build, `go test ./...`, deploy, verify `pmset -g` line, report. Do not enable the option yourself; Elijah toggles it.
+
+## Phase 6.1 — config got wiped to `{}` during phase 6 (lid_mode lost). Harden + explain.
+
+1. Tell me, from your own shell history in this session, every command you ran that could write `~/.config/keepgoing/config.json` (`keepgoing screen …`, `lid …`, `hotspot …`, `HOME=` tricks, tests). One line each.
+2. `main.go`: `saved, _ := config.Load()` → if `err != nil`, print `keepgoing: config unreadable: <err>` and exit 1 for every subcommand except `daemon` (daemon logs it and continues read-only: never calls Save).
+3. `internal/config.Save`: if the existing file is non-empty and the new config marshals to `{}`, refuse with an error `refusing to overwrite config with empty settings` — callers must set at least one field. Add a `go test` for it.
+4. `app/main.swift` `loadConfig()`: if the file exists but doesn't parse, show one alert `Couldn't read settings` with the path and return `nil`; `setConfigKey` must not save when load returned `nil`.
+5. Every CLI/config write path: log one line to the daemon log or stderr `[config] wrote <path> (<keys>)` so the next wipe is attributable.
+6. Build, test, deploy, commit, push, report (include the answer to 1).
