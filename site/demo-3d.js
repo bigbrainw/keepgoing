@@ -276,13 +276,16 @@ export function initLaptopDemo(canvas, onClosedChange, onFirstFrame) {
   const screenMat = new THREE.MeshBasicMaterial({
     map: screenTex,
     toneMapped: false,
-    side: THREE.FrontSide
+    side: THREE.FrontSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4
   });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(2.84, 1.79), screenMat);
-  screen.position.set(0, 0.001, 0.976);
+  screen.position.set(0, -0.024, 0);
   screen.rotation.x = Math.PI / 2;
-  screen.renderOrder = 2;
-  lidGroup.add(screen);
+  screen.renderOrder = 5;
+  lid.add(screen);
 
   if (typeof console !== 'undefined' && console.log) {
     console.log('[demo-3d] screen texture', screenTex.image.width, 'x', screenTex.image.height);
@@ -294,10 +297,10 @@ export function initLaptopDemo(canvas, onClosedChange, onFirstFrame) {
     new THREE.PlaneGeometry(0.22, 0.04),
     new THREE.MeshBasicMaterial({ color: 0x0a0a0a, toneMapped: false, side: THREE.FrontSide })
   );
-  notch.position.set(0, 0.002, 0.22);
+  notch.position.set(0, -0.023, -0.75);
   notch.rotation.x = Math.PI / 2;
-  notch.renderOrder = 3;
-  lidGroup.add(notch);
+  notch.renderOrder = 6;
+  lid.add(notch);
 
   const hingeGlowLine = makeRadialSprite(0.4, 0, '200,148,26');
   hingeGlowLine.scale.set(3.2, 0.3, 1);
