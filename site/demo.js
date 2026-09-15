@@ -12,6 +12,8 @@
   var closed = false;
   var laptop3d = null;
   var bannerTimer = null;
+  var canLoad = false;
+  var loading = false;
   var useFallback = reduced || !hasWebGL();
 
   function hasWebGL() {
@@ -64,10 +66,6 @@
     if (isClosed) showBanner(true, instant);
   }
 
-  btn.addEventListener('click', function () {
-    applyClosed(!closed, reduced);
-  });
-
   function revealCanvas() {
     if (!canvas || !fallback) return;
     fallback.hidden = true;
@@ -76,31 +74,56 @@
   }
 
   function load3d() {
-    if (laptop3d || useFallback) return;
-    import('./demo-3d.js').then(function (mod) {
+    if (laptop3d || useFallback || loading) return Promise.resolve(laptop3d);
+    loading = true;
+    return import('./demo-3d.js').then(function (mod) {
       return mod.initLaptopDemo(canvas, onLidClosed);
     }).then(function (api) {
       laptop3d = api;
+      loading = false;
       revealCanvas();
       window.__laptopDemo = api;
       window.__laptopReady = true;
+      return api;
     }).catch(function () {
+      loading = false;
       useFallback = true;
+      return null;
     });
   }
+
+  function activate3d() {
+    if (useFallback || !canLoad) return Promise.resolve(null);
+    return load3d();
+  }
+
+  btn.addEventListener('click', function () {
+    var next = !closed;
+    if (!laptop3d && !useFallback && canLoad) {
+      activate3d().then(function (api) {
+        if (api) applyClosed(next, reduced);
+        else applyClosed(next, reduced);
+      });
+      return;
+    }
+    applyClosed(next, reduced);
+  });
 
   if (!useFallback && laptopStage && canvas) {
     if ('IntersectionObserver' in window) {
       var obs = new IntersectionObserver(function (entries) {
         if (entries[0].isIntersecting) {
+          canLoad = true;
           obs.disconnect();
-          load3d();
         }
       }, { rootMargin: '200px' });
       obs.observe(laptopStage);
     } else {
-      load3d();
+      canLoad = true;
     }
+    laptopStage.addEventListener('pointerdown', function () {
+      if (!laptop3d && canLoad) activate3d();
+    }, { once: true });
   }
 
   document.querySelectorAll('.cmd-wrap pre code').forEach(function (code) {
