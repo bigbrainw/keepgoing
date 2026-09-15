@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -55,6 +56,10 @@ type Server struct {
 
 	// Extra, if set, is merged into /_status (daemon adds agents/awake/wifi).
 	Extra func() map[string]any
+
+	thermalMu    sync.RWMutex
+	thermalState string
+	thermalSince time.Time
 }
 
 // New builds a Server. holdMax bounds how long a request may be parked.
@@ -87,6 +92,7 @@ func New(routes []Route, nw *netwatch.Watcher, holdMax time.Duration) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/_status", s.status)
+	mux.HandleFunc("/_thermal", s.thermal)
 	mux.HandleFunc("/_force", s.force) // debug: /_force?offline=1|0|clear
 	mux.HandleFunc("/", s.serve)
 	return mux
@@ -105,6 +111,46 @@ func (s *Server) StatsSnapshot() Stats {
 	}
 }
 
+// SetThermal stores the latest thermal state from the menu bar app.
+func (s *Server) SetThermal(state string) {
+	s.thermalMu.Lock()
+	if state != s.thermalState {
+		s.thermalState = state
+		s.thermalSince = time.Now()
+	}
+	s.thermalMu.Unlock()
+}
+
+// ThermalSnapshot returns the stored thermal state and when it last changed.
+func (s *Server) ThermalSnapshot() (state string, since time.Time) {
+	s.thermalMu.RLock()
+	state, since = s.thermalState, s.thermalSince
+	s.thermalMu.RUnlock()
+	return state, since
+}
+
+func (s *Server) thermal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		State string `json:"state"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	switch body.State {
+	case "nominal", "fair", "serious", "critical":
+		s.SetThermal(body.State)
+	default:
+		http.Error(w, "invalid state", http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	m := map[string]any{
@@ -117,6 +163,12 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	if s.Extra != nil {
 		for k, v := range s.Extra() {
 			m[k] = v
+		}
+	}
+	if state, since := s.ThermalSnapshot(); state != "" {
+		m["thermal"] = state
+		if !since.IsZero() {
+			m["thermal_since"] = since.Format(time.RFC3339)
 		}
 	}
 	_ = json.NewEncoder(w).Encode(m)

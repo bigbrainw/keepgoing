@@ -1,6 +1,7 @@
 // KeepGoing menu bar app. Thin UI over the keepgoing daemon.
 import Cocoa
 import ServiceManagement
+import UserNotifications
 
 let statusURL = URL(string: "http://127.0.0.1:7777/_status")!
 let label = "com.elijah.keepgoing"
@@ -15,6 +16,7 @@ struct Status {
     var sleepDisabled = false
     var screenOffAfter = 0
     var hotspot = ""
+    var thermal = ""
     var reachable = false
 }
 
@@ -32,12 +34,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var renderedLid = ""
     var renderedNetwork = ""
     var renderedHotspot = ""
+    var renderedThermal = ""
     var renderedAlways = false
     var renderedScreenOff = false
     var renderedLidToggle = false
     var renderedLogin = false
     var renderedStartHidden = true
     var renderedRestartHidden = false
+    var thermalNotified = false
+    var thermalTimer: Timer?
 
     let versionItem = NSMenuItem()
     let agentsItem = NSMenuItem()
@@ -45,6 +50,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let lidItem = NSMenuItem()
     let netItem = NSMenuItem()
     let hotspotItem = NSMenuItem()
+    let thermalItem = NSMenuItem()
     let lidToggleItem = NSMenuItem(title: "Keep awake with lid closed", action: #selector(toggleLid), keyEquivalent: "")
     let alwaysItem = NSMenuItem(title: "Always keep awake", action: #selector(toggleAlways), keyEquivalent: "")
     let screenOffItem = NSMenuItem(title: "Turn off screen when idle", action: #selector(toggleScreenOff), keyEquivalent: "")
@@ -65,6 +71,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showOnboardingIfNeeded()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in self.refresh() }
+        startThermalReporting()
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         renderedLogin = loginItem.state == .on
     }
@@ -73,7 +80,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         versionItem.isEnabled = false
         menu.addItem(versionItem)
         menu.addItem(.separator())
-        for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem] {
+        for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] {
             it.isEnabled = false
             menu.addItem(it)
         }
@@ -128,6 +135,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 s.sleepDisabled = j["sleep_disabled"] as? Bool ?? false
                 s.screenOffAfter = j["screen_off_after"] as? Int ?? 0
                 s.hotspot = j["hotspot"] as? String ?? ""
+                s.thermal = j["thermal"] as? String ?? ""
             }
             DispatchQueue.main.async {
                 if s.reachable {
@@ -158,18 +166,19 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if up {
             let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
             setTitle(versionItem, to: "KeepGoing \(ver)", store: &renderedVersion)
-            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem] { it.isHidden = false }
+            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] { it.isHidden = false }
             setTitle(agentsItem, to: "Agents: \(formatAgents(s.agents))", store: &renderedAgents)
             setTitle(sleepItem, to: s.awake ? "Sleep: blocked" : "Sleep: allowed — no agents", store: &renderedSleep)
             setTitle(lidItem, to: lidStatus(s), store: &renderedLid)
             setTitle(netItem, to: s.online ? "Network: online" : "Network: offline — recovering", store: &renderedNetwork)
             setTitle(hotspotItem, to: s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)", store: &renderedHotspot)
+            setTitle(thermalItem, to: "Thermal: \(s.thermal.isEmpty ? "—" : s.thermal)", store: &renderedThermal)
             setCheck(lidToggleItem, s.lidMode, store: &renderedLidToggle)
             setCheck(alwaysItem, s.always, store: &renderedAlways)
             setCheck(screenOffItem, s.screenOffAfter > 0, store: &renderedScreenOff)
         } else {
             setTitle(versionItem, to: "Daemon not running", store: &renderedVersion)
-            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem] { it.isHidden = true }
+            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] { it.isHidden = true }
         }
 
         let loginOn = SMAppService.mainApp.status == .enabled
@@ -223,6 +232,60 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if on != store || item.state != state {
             item.state = state
             store = on
+        }
+    }
+
+    func thermalName() -> String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "nominal"
+        }
+    }
+
+    func startThermalReporting() {
+        reportThermal()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(thermalChanged),
+            name: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil
+        )
+        thermalTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in self.reportThermal() }
+    }
+
+    @objc func thermalChanged() {
+        reportThermal()
+    }
+
+    func reportThermal() {
+        let state = thermalName()
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:7777/_thermal")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["state": state])
+        URLSession.shared.dataTask(with: req).resume()
+
+        if state == "serious" || state == "critical" {
+            if !thermalNotified {
+                postThermalNotification()
+                thermalNotified = true
+            }
+        } else {
+            thermalNotified = false
+        }
+    }
+
+    func postThermalNotification() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "KeepGoing"
+            content.body = "Mac is running hot with the lid closed. Open it or move it off soft surfaces."
+            let req = UNNotificationRequest(identifier: "keepgoing-thermal", content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(req)
         }
     }
 

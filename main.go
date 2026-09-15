@@ -253,6 +253,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	awakeSince := time.Time{}
 	var screenFired bool
 	var lastIdle float64
+	var thermalWarned string
 	lidClosed := lid.Closed()
 	coolMgr := cool.New()
 	coolOn := saved.LidMode && saved.CoolOn()
@@ -407,6 +408,14 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		}
 		if coolOn {
 			coolMgr.Tick(ps, lidClosed, coolOn)
+		}
+		if state, _ := co.px.ThermalSnapshot(); state == "serious" || state == "critical" {
+			if state != thermalWarned {
+				log.Printf("[thermal] %s", state)
+				thermalWarned = state
+			}
+		} else {
+			thermalWarned = ""
 		}
 		select {
 		case <-ctx.Done():
