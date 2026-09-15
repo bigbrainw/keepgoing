@@ -168,12 +168,24 @@ h1 {
     background: radial-gradient(ellipse 85% 55% at 50% 35%, rgba(230, 180, 34, 0.12), transparent 68%);
   }
 }
-.demo-wrap { position: relative; z-index: 1; }
+.demo-wrap {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+}
+.demo-header { display: contents; }
 .demo-label {
   font-size: 1rem; font-weight: 600; color: var(--muted);
-  margin: 0 0 1.25rem;
+  margin: 0 0 1.25rem; order: 1;
 }
-.demo-stage { display: grid; gap: 2rem; }
+@media (min-width: 820px) {
+  .demo-wrap { display: block; }
+  .demo-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; margin-bottom: 1.25rem;
+  }
+  .demo-label { margin: 0; order: unset; }
+}
+.demo-stage { display: grid; gap: 2rem; order: 2; }
 @media (min-width: 641px) {
   .demo-stage { grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 }
@@ -201,7 +213,12 @@ h1 {
   text-align: center; margin: .35rem 0 0; opacity: 0;
   transition: opacity .35s ease;
 }
-.demo-btn { margin-top: 1.5rem; width: 100%; max-width: 280px; }
+.demo-btn {
+  order: 3; margin-top: 1.5rem; width: 100%; max-width: 280px;
+}
+@media (min-width: 820px) {
+  .demo-btn { order: unset; margin: 0; width: auto; max-width: none; }
+}
 
 /* phone */
 .phone {
