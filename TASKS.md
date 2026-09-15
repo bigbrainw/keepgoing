@@ -1,48 +1,32 @@
 # keepgoing — task queue for Cursor agent
 
-**Phase 9: run cool with the lid closed.** Elijah: "way too hot when I close the lid." Go daemon + Swift app.
+**Phase 10: working vs idle agents.** Elijah: "are we able to know which is actually running, not just idle?"
 
 ## Hard rules
-- Never run `sudo`, `pmset -a …`, `visudo`, or write `/etc` yourself. You may run `taskpolicy` and `pmset -g` (read-only). Elijah runs `keepgoing lid enable` to install the extended rule.
-- `./app/build.sh`; bundle binary stays `keepgoing-cli`. Test daemons on ports 7790/7791 `-no-wifi -no-awake`.
-- Deploy: `rm -rf ~/Applications/KeepGoing.app && cp -R dist/KeepGoing.app ~/Applications/ && launchctl kickstart -k gui/$(id -u)/com.elijah.keepgoing && open ~/Applications/KeepGoing.app`. Then `keepgoing lid status` must print `lid_mode=true`.
-- `~/.cursor/skills/native-mac-polish/SKILL.md` for every string. Commit per task, push, no history rewriting.
-
-## Facts (verified on this Mac)
-- Lid state: `ioreg -r -k AppleClamshellState -d 4 | grep AppleClamshellState` → `Yes`/`No`.
-- Low Power Mode: `pmset -g | grep lowpowermode` (0/1). Setting it needs root: `/usr/bin/pmset -a lowpowermode 1|0`.
-- Efficiency cores without root: `taskpolicy -b -p <pid>` (background QoS), undo `taskpolicy -B -p <pid>`. Works on the user's own processes.
-- Thermal: `ProcessInfo.processInfo.thermalState` in Swift (nominal/fair/serious/critical) + `NSProcessInfo.thermalStateDidChangeNotification`. Go can't read it directly; the app reports it to the daemon.
+Same as Phase 9: no sudo/pmset -a/visudo; build `./app/build.sh`; deploy per the usual rule then `keepgoing lid status` → `lid_mode=true`; strings per `~/.cursor/skills/native-mac-polish/SKILL.md`; commit per task, push, no history rewriting. Do not close the lid.
 
 ## Tasks
 
-### 1. Extend the sudoers rule (internal/lid)
-`Sudoers` gains two commands: `/usr/bin/pmset -a lowpowermode 1, /usr/bin/pmset -a lowpowermode 0` (same `%admin … NOPASSWD:` line, comma-separated, exact args). `lid.Available()` must check all four (`sudo -n -l` each). `keepgoing lid enable` reinstalls when any is missing (prints that it's an upgrade of the rule). `lid.SetLowPower(bool)` mirrors `Set()`. Update the grep-verification line in `InstallScript`, the README rule text, and the site FAQ sentence ("two `pmset` commands" → "four").
+### 1. Universal signal: CPU-time delta (internal/procwatch)
+`ps -axo pid=,cputime=,args=` → parse `cputime` (macOS format `mm:ss.cc`, can be `hh:mm:ss`). Keep the previous sample per PID; `Proc` gains `CPUPct float64` (delta cputime / wall delta ×100) and `Working bool` (= CPUPct ≥ 2.0 **or** any signal from tasks 2–3 within the last 60 s). Children count too: a `claude` whose child (`zsh`, `node`, `go test`…) is burning is working — sum cputime over the PID's descendant tree (one `ps -axo pid=,ppid=,cputime=` pass, build the tree in Go).
+`Summary()` becomes `claude 2 working · 12 idle` (per agent kind, only kinds present). `/_status.agent_procs[]` gets `cpu_pct`, `working`, `working_since`.
 
-### 2. Lid watcher in the daemon
-`internal/lid.Closed() bool` via ioreg. Daemon tick (5 s) tracks `lidClosed` transitions and logs `[lid] closed` / `[lid] opened`. `/_status` gets `lid_closed`.
+### 2. Exact signal: Claude Code hooks (opt-in)
+`keepgoing hooks install|uninstall|status`: merge into `~/.claude/settings.json` (create if missing; never clobber other hooks; JSON-preserving edit; back up to `settings.json.bak.<ts>` first):
+- `UserPromptSubmit` and `PreToolUse` → `curl -s -m 1 -X POST http://127.0.0.1:7777/_agent -d '{"tool":"claude","pid":'$PPID',"state":"working"}'`
+- `Stop` and `Notification` → same with `"state":"idle"`.
+Daemon endpoint `/_agent` (POST, loopback only) records `{pid,tool,state,ts}`; procwatch consults it (task 1). Print what was written.
 
-### 3. Cool mode (config `cool_mode`, default **true** when lid mode is on)
-On lid-closed transition while agents are running:
-- `lid.SetLowPower(true)` (if the rule allows; log if not).
-- For every agent PID from procwatch (claude, codex, codex-app, cursor): `taskpolicy -b -p PID`; remember the set.
-On lid-opened transition: `SetLowPower(false)` **only if the daemon turned it on** (remember prior state), `taskpolicy -B -p` for every remembered PID still alive. Also on daemon shutdown. New agent processes that appear while closed get `-b` too.
-`/_status`: `cool_mode`, `low_power`, `cool_pids` (count). CLI: `keepgoing cool on|off|status`.
+### 3. Exact signal: Codex notify (opt-in)
+`keepgoing hooks install` also handles Codex: if `~/.codex/config.toml` exists, add/append to `notify = [...]` a small script `~/.config/keepgoing/codex-notify.sh` that POSTs `state=idle` on `turn-ended` (Codex passes the event JSON as argv[1]; parse `type`). Preserve any existing notify entry (Elijah has one) — the array may hold one command only in some versions; if so, wrap: our script calls the previous one with the same args afterwards. Show the resulting TOML line.
 
-### 4. Thermal readout
-Swift app: observe `thermalStateDidChangeNotification` + poll every 10 s; `POST http://127.0.0.1:7777/_thermal` body `{"state":"nominal|fair|serious|critical"}`. Daemon stores it (`/_status.thermal`, plus `thermal_since`). Menu status group gets one line `Thermal: nominal` (hide when nominal? no — always show, it's the point). At `serious`/`critical`: daemon logs, and the app posts a `UNUserNotificationCenter` notification once per episode: title `KeepGoing`, body `Mac is running hot with the lid closed. Open it or move it off soft surfaces.` (request notification permission on first need, once).
+### 4. cmux (opt-in, only if `cmux` on PATH)
+Every tick, if `cmux` exists: `cmux sessions list` → for each `claude|cursor` row with `pid_exists=yes`, map surface→workspace, then `cmux workspace status --workspace <uuid>` → `working|idle`; feed into the same signal store as tasks 2–3 (tool + pid where available, else by cwd match). Cap the cost: at most one `sessions list` per 10 s. Gate behind config `cmux_status` (default true when the binary exists).
 
-### 5. Menu
-Under "Keep awake with lid closed": checkbox **Run cooler with lid closed** (= `cool_mode`), enabled only when lid mode is on. Tooltip-free; the README explains.
+### 5. Thermal log + menu
+`thermal.csv` gains `working` (count) after `agents`. `keepgoing thermal` shows it. Menu: `Agents: claude 2 working · 12 idle` (one line, truncate kinds if > 40 chars).
 
-### 6. README + site
-README daemon table: one row "Heat — lid closed → Low Power Mode + agents moved to efficiency cores; restored when the lid opens. Thermal state shown in the menu; notification at serious." Site FAQ "Hot in a bag?" answer becomes: *With the lid closed it drops into Low Power Mode and moves agents to the efficiency cores, and warns you if it still gets hot. Keep it on a hard surface.* Word budget: replace, don't add.
+### 6. Optional policy: idle sleep
+Config `idle_sleep_after` (minutes, 0 = off, **default 0**). When > 0 and every agent has been idle that long, release the awake assertion + lid override (same path as no-agents), log `[daemon] all agents idle for Nm, allowing sleep`. Re-arm the moment any agent is working again. Menu: checkbox **Allow sleep when agents are idle 30 min** (writes 30/0). README: one paragraph, with the remote-control caveat: an idle Mac asleep can't receive your phone's next message.
 
-### 7. Build, `go test ./...`, deploy (rule above), `keepgoing lid status`, `keepgoing cool status`. Do NOT close the lid to test. Report; tell Elijah he needs to run `keepgoing lid enable` once for the extended rule.
-
-### 8. Temperature + lid log (Elijah: "keep a log tracking when the lid is off… I want to keep track the temperature")
-- **CPU temperature in °C, no root**: in the Swift app, read the SMC via IOKit (`IOServiceMatching("AppleSMC")`, `IOConnectCallStructMethod` selector 2 with the standard `SMCKeyData_t` struct — the same approach as the open-source `smctemp` / SMCKit). On Apple Silicon average the available CPU die keys (`Tp09`, `Tp0T`, `Tp01`, `Tp05`, `Tp0D`, `Tp0H`, `Tp0L`, `Tp0P`, `Tp0X`, `Tp0b` — read all, keep those returning 10–120, average); on Intel use `TC0P`. If no key reads, report `null`. Poll every 10 s; POST with the thermal state: `{"state":"…","cpu_c":63.4}`.
-- **Log**: daemon appends one CSV line every 30 s (and immediately on any lid/thermal-state transition) to `~/Library/Logs/keepgoing/thermal.csv`: `ts_iso,lid_closed,thermal_state,cpu_c,low_power,cool_pids,agents,on_battery`. Header written once. Rotate at 5 MB (keep one `.1`).
-- **CLI**: `keepgoing thermal` prints the last 20 lines formatted as a table; `keepgoing thermal --csv` prints the path. `/_status` adds `cpu_c`.
-- **Menu**: the thermal line becomes `Thermal: fair · 71 °C` (omit the °C part when null). **Show thermal log** item in the app group (opens the CSV in the default app).
-- Verify: `keepgoing thermal` shows real numbers on this Mac within a minute of deploy; put the first 5 lines in your report.
+### 7. Build, `go test ./...` (add tests for cputime parsing and the descendant sum), deploy, verify `keepgoing status` shows working/idle counts that make sense (this session's Claude should read working while it types), report with the first `keepgoing thermal` lines showing the new column.
