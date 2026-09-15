@@ -39,3 +39,10 @@ Under "Keep awake with lid closed": checkbox **Run cooler with lid closed** (= `
 README daemon table: one row "Heat — lid closed → Low Power Mode + agents moved to efficiency cores; restored when the lid opens. Thermal state shown in the menu; notification at serious." Site FAQ "Hot in a bag?" answer becomes: *With the lid closed it drops into Low Power Mode and moves agents to the efficiency cores, and warns you if it still gets hot. Keep it on a hard surface.* Word budget: replace, don't add.
 
 ### 7. Build, `go test ./...`, deploy (rule above), `keepgoing lid status`, `keepgoing cool status`. Do NOT close the lid to test. Report; tell Elijah he needs to run `keepgoing lid enable` once for the extended rule.
+
+### 8. Temperature + lid log (Elijah: "keep a log tracking when the lid is off… I want to keep track the temperature")
+- **CPU temperature in °C, no root**: in the Swift app, read the SMC via IOKit (`IOServiceMatching("AppleSMC")`, `IOConnectCallStructMethod` selector 2 with the standard `SMCKeyData_t` struct — the same approach as the open-source `smctemp` / SMCKit). On Apple Silicon average the available CPU die keys (`Tp09`, `Tp0T`, `Tp01`, `Tp05`, `Tp0D`, `Tp0H`, `Tp0L`, `Tp0P`, `Tp0X`, `Tp0b` — read all, keep those returning 10–120, average); on Intel use `TC0P`. If no key reads, report `null`. Poll every 10 s; POST with the thermal state: `{"state":"…","cpu_c":63.4}`.
+- **Log**: daemon appends one CSV line every 30 s (and immediately on any lid/thermal-state transition) to `~/Library/Logs/keepgoing/thermal.csv`: `ts_iso,lid_closed,thermal_state,cpu_c,low_power,cool_pids,agents,on_battery`. Header written once. Rotate at 5 MB (keep one `.1`).
+- **CLI**: `keepgoing thermal` prints the last 20 lines formatted as a table; `keepgoing thermal --csv` prints the path. `/_status` adds `cpu_c`.
+- **Menu**: the thermal line becomes `Thermal: fair · 71 °C` (omit the °C part when null). **Show thermal log** item in the app group (opens the CSV in the default app).
+- Verify: `keepgoing thermal` shows real numbers on this Mac within a minute of deploy; put the first 5 lines in your report.
