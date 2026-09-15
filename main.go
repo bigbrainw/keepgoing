@@ -398,9 +398,14 @@ func cmdLid(args []string, saved config.Config) int {
 		return 0
 	case "enable":
 		if !lid.Available() {
-			fmt.Println("One-time setup: a sudoers rule so the daemon can run exactly these two commands without a password:")
+			if lid.LegacyAvailable() {
+				fmt.Println("Upgrading sudoers rule to add Low Power Mode commands.")
+			}
+			fmt.Println("One-time setup: a sudoers rule so the daemon can run exactly these four commands without a password:")
 			fmt.Println("  /usr/bin/pmset -a disablesleep 1")
 			fmt.Println("  /usr/bin/pmset -a disablesleep 0")
+			fmt.Println("  /usr/bin/pmset -a lowpowermode 1")
+			fmt.Println("  /usr/bin/pmset -a lowpowermode 0")
 			fmt.Println("Written to " + lid.SudoersPath + " after visudo validation. Admin password required.")
 			cmd := exec.Command("sudo", "sh", "-c", lid.InstallScript)
 			cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr

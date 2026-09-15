@@ -71,8 +71,8 @@ One-time setup installs a sudoers drop-in at `/etc/sudoers.d/keepgoing` (admin p
 
 ```
 # keepgoing: let the daemon keep the Mac awake with the lid closed.
-# Only these two exact commands, nothing else.
-%admin ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0
+# Only these four exact commands, nothing else.
+%admin ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0, /usr/bin/pmset -a lowpowermode 1, /usr/bin/pmset -a lowpowermode 0
 ```
 
 Nothing else is granted. To remove the rule after uninstalling or disabling lid mode:
