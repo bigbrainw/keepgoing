@@ -610,16 +610,24 @@ func cmdHooks(args []string) int {
 			fmt.Fprintln(os.Stderr, "claude:", err)
 			return 1
 		}
+		if err := hooks.InstallCodex(); err != nil {
+			fmt.Fprintln(os.Stderr, "codex:", err)
+			return 1
+		}
 		return 0
 	case "uninstall":
 		if err := hooks.UninstallClaude(); err != nil {
 			fmt.Fprintln(os.Stderr, "claude:", err)
 			return 1
 		}
+		if err := hooks.UninstallCodex(); err != nil {
+			fmt.Fprintln(os.Stderr, "codex:", err)
+			return 1
+		}
 		fmt.Println("removed keepgoing hooks from", hooks.ClaudeSettingsPath())
 		return 0
 	case "status":
-		fmt.Printf("claude_hooks=%v\n", hooks.ClaudeStatus())
+		fmt.Printf("claude_hooks=%v codex_notify=%v\n", hooks.ClaudeStatus(), hooks.CodexStatus())
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, "unknown hooks subcommand:", args[0])
