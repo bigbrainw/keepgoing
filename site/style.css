@@ -84,7 +84,7 @@ h1 {
 }
 .lead { color: var(--muted); margin: 0 0 1.5rem; max-width: 38rem; }
 .btn-row { display: flex; flex-wrap: wrap; gap: .625rem; margin-bottom: .75rem; }
-.hero-meta { font: 400 13px/1.4 var(--mono); color: var(--muted); margin: 0; }
+.hero-meta { font-size: .875rem; color: var(--muted); margin: 0; max-width: 38rem; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -348,6 +348,14 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
   color: var(--muted); font-size: 11px; min-width: 4.5rem;
 }
 .icon-state.active { color: var(--bolt); }
+@media (max-width: 480px) {
+  .icon-states {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem 1rem;
+    justify-items: center;
+  }
+}
 .fake-alert { padding: 1rem; font-size: 12px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .fake-alert-title { font-weight: 600; margin: 0 0 .75rem; font-size: 13px; line-height: 1.35; }
 .fake-alert-btns { display: flex; gap: .5rem; justify-content: flex-end; }
@@ -384,7 +392,17 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
   -webkit-tap-highlight-color: transparent;
 }
 .copy-btn:hover { color: var(--ink); border-color: var(--bolt); }
-@media (min-width: 641px) {
+@media (max-width: 480px) {
+  .cmd-wrap {
+    display: flex; flex-direction: column; align-items: stretch;
+  }
+  .cmd-wrap code { padding-right: 1rem; }
+  .copy-btn {
+    position: static; align-self: flex-end;
+    margin-top: .5rem; opacity: 1;
+  }
+}
+@media (min-width: 481px) {
   .copy-btn { opacity: 0; }
   .cmd-wrap:hover .copy-btn, .copy-btn:focus { opacity: 1; }
 }
@@ -404,10 +422,15 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
 
 .foot {
   padding: 2rem 0 2.5rem; border-top: 1px solid var(--line);
-  text-align: center; font-size: .875rem; color: var(--muted);
+  font-size: .875rem; color: var(--muted);
+}
+.foot-links {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  align-items: center; gap: .75rem 1.25rem;
 }
 .foot a { color: var(--muted); text-decoration: none; }
 .foot a:hover { color: var(--bolt); }
+.foot-version { color: var(--muted); }
 
 @media (max-width: 640px) {
   .demo-stage { grid-template-columns: 1fr; }
@@ -415,7 +438,6 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
   .btn-row .btn { width: 100%; }
   .hero-inner { grid-template-columns: 1fr; }
   .feat-grid { grid-template-columns: 1fr; }
-  .copy-btn { opacity: 1; }
 }
 
 @media (min-width: 1440px) {
