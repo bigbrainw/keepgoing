@@ -27,3 +27,10 @@ Also still binding: `~/.cursor/skills/landing-page-polish/SKILL.md`, `~/.cursor/
 2. **Build** per the plan. Keep the demo working. Commit.
 3. **Pre-flight** from `design-taste-frontend`, then `web-design-guidelines` audit; fix findings. Commit.
 4. **Verify** at 390 / 820 / 1440, light + dark: no horizontal scroll, demo runs, contrast ≥ 4.5:1, focus visible, reduced-motion respected. Deploy. Report: URL, word count, the DESIGN.md summary, audit findings fixed.
+
+## Phase 7.1 — nits from review (one commit)
+Reviewed live at 1280 light and 390 dark. Ship-quality. Three small things:
+1. `macOS 13+ · MIT · 3 MB` under the buttons and `MIT · GitHub · Issues · v0.1.0` in the footer are the middle-dot meta strings `frontend-design` calls a tell. Replace with plain sentences/links: under buttons `Free and open source. macOS 13 or later.`; footer: four links separated by spacing, no dots, version as `Version 0.1.0`.
+2. Icon-state strip wraps to 3 + 1 at 390 px ("offline" alone on a second row). Make it 2×2 below 480 px, or shrink labels so four fit.
+3. Copy buttons overlap the code text at 390 px (install command and proof block). On ≤ 480 px put the button below the code block, right-aligned, instead of absolutely positioned inside it.
+Deploy, commit, push, report.
