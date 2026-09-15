@@ -96,3 +96,12 @@ Build the laptop **procedurally** — no downloaded GLB, no logos, no Apple word
 6. **Materials**: aluminium is too flat — `metalness 0.9, roughness 0.35, clearcoat 0.25, clearcoatRoughness 0.3, envMapIntensity 1.1`; base deck slightly lighter (#7a7c84) than lid (#66686f). Keyboard well 40 % of deck depth, keys as an instanced grid of 14×5 tiny rounded boxes (#1c1c1e) — cheap, sells it.
 7. Re-render the two fallback PNGs from the fixed scene. Caption left stays `Lid closed, on battery`.
 8. Lighthouse ≥ 90 still. Deploy, commit, push, screenshot open + closed at 1280.
+
+## G3. 3D demo — last fixes (reviewed live after cache-bust)
+1. **Cache**: `demo.js` does `import('./demo-3d.js')` with no version while `vercel.json` sets a long cache on `*.js` → returning visitors run stale code (I saw it). Import `./demo-3d.js?v=<VERSION>` and bump on every change, or drop the immutable header for `demo*.js`.
+2. **Framing**: the laptop occupies ~35 % of the stage width and sits upper-right. Fit so the open laptop spans ~70 % of the stage width, centred horizontally, base resting at ~78 % of stage height. Same fit for closed (it may look smaller; that's fine, keep camera fixed between states — no camera animation).
+3. **Screen still blank** in the open state. Debug it properly: log `texture.image` size, confirm the plane's `material.map` is the CanvasTexture, `material.side = FrontSide` and that the plane's +Z faces the camera when open (add a temporary red `MeshBasicMaterial` to confirm which face is visible, then swap back). Draw the terminal at 1024×640 with 40 px mono text so it is legible at demo size.
+4. **Keys z-fighting**: keys look like a dotted mess. Raise the key grid to sit 0.006 above the keyboard well, gap 0.012 between keys, `polygonOffset` not needed once raised. Also the well should be a shallow inset, not a plane at deck height.
+5. **Bolt badge**: the sprite glyph is wrong (reads like an "N"). Reuse the exact SVG bolt path from `favicon.svg`, rendered to a 256×256 canvas, gold circle behind, white bolt. Size 0.45, hover 0.35 above the lid.
+6. **Hinge glow** is barely visible — a dot at the right edge. Make it a 3.0-long box sitting exactly on the hinge line, emissive intensity 4, `toneMapped=false`, plus a 3.2 × 0.3 gold radial sprite behind it at 40 % opacity so it reads as a glow line.
+7. Re-render fallback PNGs. Deploy, commit, push, screenshot open + closed.
