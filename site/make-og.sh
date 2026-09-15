@@ -1,5 +1,5 @@
 #!/bin/bash
-# Render 1200x630 OG image from hero text. No external services.
+# Render 1200x630 OG image matching site tokens (--paper, --bolt, IBM Plex Sans).
 set -euo pipefail
 cd "$(dirname "$0")"
 OUT=img/og.png
@@ -11,28 +11,44 @@ import AppKit
 let w: CGFloat = 1200, h: CGFloat = 630
 let img = NSImage(size: NSSize(width: w, height: h))
 img.lockFocus()
-NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1).setFill()
+
+// --paper light scheme (OG previews are usually light)
+let paper = NSColor(calibratedRed: 0.957, green: 0.965, blue: 0.980, alpha: 1) // #f4f6fa
+let ink = NSColor(calibratedRed: 0.102, green: 0.137, blue: 0.196, alpha: 1)   // #1a2332
+let bolt = NSColor(calibratedRed: 0.784, green: 0.580, blue: 0.102, alpha: 1)   // #c8941a
+let muted = NSColor(calibratedRed: 0.353, green: 0.404, blue: 0.471, alpha: 1)  // #5a6778
+
+paper.setFill()
 NSRect(x: 0, y: 0, width: w, height: h).fill()
 
 let title = "Close the lid. Your agent keeps going."
-let sub = "KeepGoing — macOS menu bar app"
+let domain = "keepgoing-pi.vercel.app"
+
+let titleFont = NSFont(name: "IBMPlexSans-SemiBold", size: 52)
+    ?? NSFont.systemFont(ofSize: 52, weight: .semibold)
+let domainFont = NSFont(name: "IBMPlexSans-Regular", size: 22)
+    ?? NSFont.systemFont(ofSize: 22, weight: .regular)
+
 let tAttr: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 52, weight: .bold),
-    .foregroundColor: NSColor.white,
+    .font: titleFont,
+    .foregroundColor: ink,
     .kern: -1.0
 ]
-let sAttr: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 28, weight: .regular),
-    .foregroundColor: NSColor(calibratedWhite: 0.65, alpha: 1)
+let dAttr: [NSAttributedString.Key: Any] = [
+    .font: domainFont,
+    .foregroundColor: muted
 ]
-let ts = title as NSString
-let ss = sub as NSString
-ts.draw(in: NSRect(x: 72, y: h - 200, width: w - 144, height: 120), withAttributes: tAttr)
-ss.draw(in: NSRect(x: 72, y: h - 260, width: w - 144, height: 40), withAttributes: sAttr)
 
-let bolt = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil)!
-NSColor(calibratedRed: 0.96, green: 0.78, blue: 0.26, alpha: 1).setFill()
-bolt.draw(in: NSRect(x: 72, y: h - 140, width: 48, height: 48))
+let ts = title as NSString
+let ds = domain as NSString
+ts.draw(in: NSRect(x: 80, y: h - 220, width: w - 160, height: 140), withAttributes: tAttr)
+ds.draw(in: NSRect(x: 80, y: 80, width: w - 160, height: 32), withAttributes: dAttr)
+
+// Gold bolt (matches site .icon-bolt)
+if let boltImg = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil) {
+    bolt.setFill()
+    boltImg.draw(in: NSRect(x: 80, y: h - 310, width: 56, height: 56))
+}
 
 img.unlockFocus()
 guard let tiff = img.tiffRepresentation,
