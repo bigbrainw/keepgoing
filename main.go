@@ -32,6 +32,7 @@ import (
 	"github.com/elijah/keepgoing/internal/awake"
 	"github.com/elijah/keepgoing/internal/agentsignal"
 	"github.com/elijah/keepgoing/internal/config"
+	"github.com/elijah/keepgoing/internal/cmux"
 	"github.com/elijah/keepgoing/internal/cool"
 	"github.com/elijah/keepgoing/internal/hooks"
 	"github.com/elijah/keepgoing/internal/lid"
@@ -264,6 +265,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var lastSeen time.Time
 	var procs []procwatch.Proc
 	watch := procwatch.NewWatcher(co.signals)
+	cmuxPoll := cmux.New(co.signals, saved.CmuxOn())
 	awakeSince := time.Time{}
 	var screenFired bool
 	var lastIdle float64
@@ -382,6 +384,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	log.Printf("[daemon] up: always=%v idle-grace=%s lid=%v", c.always, c.idleGrace, lidOK)
 	prev := ""
 	for {
+		cmuxPoll.Tick()
 		ps, err := watch.Scan()
 		if err != nil {
 			log.Printf("[daemon] scan: %v", err)
