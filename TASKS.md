@@ -52,3 +52,12 @@ v2 has the laptop lid drawn as a rotated rectangle overlapping the headline. Do 
   - bolt badge: gold circle r=18 centred at (990, 380) with the white bolt path inside; a 30 px soft gold halo (alpha 0.25) around it.
 - Bottom-left `keepgoing-pi.vercel.app`, 22 px, `--muted`, at (80, 560).
 - Verify by opening the PNG: text and laptop must not touch. Deploy, commit, push.
+
+## E. Demo phones = real agent apps (Elijah's request)
+Replace the generic iMessage phone screens in the lid demo with recreations of the actual remote-control apps. Left phone = **Claude** app (Claude Code remote session). Right phone = **Codex** (ChatGPT app, Codex tab). No logos, no wordmark images — app name as text in the header is enough; do not copy brand colours beyond neutral dark/light.
+- Copy (both phones): user message **Fix the failing tests**. Then typing "…". Left ends with a muted system line **No reply** ; right ends with **Done — 3 tests fixed** plus one tool chip above it: `Ran npm test`.
+- Claude app screen: dark canvas (#1c1c1e), header row `‹  Claude Code · keepgoing` 13 px, user message as a soft rounded bubble right-aligned (#2c2c2e), assistant text left-aligned plain (no bubble) with a small 6 px dot avatar; typing indicator three dots.
+- Codex app screen: dark canvas (#0d0d0d), header `‹  Codex · keepgoing/main`, user bubble right (#262626), assistant response as plain text with a tool chip (`Ran npm test`, 11 px, 1 px border, rounded 6) above it, then the reply line.
+- Phone frame unchanged (rounded 40, 1.5 px border). Status bar keeps 9:41 + signal.
+- Captions under laptops stay: *Without KeepGoing — macOS sleeps in 67 s.* / *With KeepGoing — Still running.* Word budget: "Fix the failing tests" is shorter than before; fine.
+- Deploy, commit, push, screenshot the closed state at 1280 and report.
