@@ -8,6 +8,7 @@
   --line: #d8dfe8;
   --muted: #5a6778;
   --bolt: #c8941a;
+  --bolt-text: #8a6510;
   --code-bg: #eef1f6;
   --mac-bar: rgba(228, 232, 238, 0.94);
   --mac-menu: #f8f9fb;
@@ -29,6 +30,7 @@
     --line: #2a3340;
     --muted: #8b9cb3;
     --bolt: #e6b422;
+    --bolt-text: #e6b422;
     --code-bg: #0c1016;
     --mac-bar: rgba(34, 40, 50, 0.94);
     --mac-menu: #1c222c;
@@ -149,7 +151,7 @@ h1 {
 .md-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mi-tick { color: var(--bolt); display: block; }
 .md.mi-off { color: var(--mac-row); }
-.md.mi-amber { color: var(--bolt); }
+.md.mi-amber { color: var(--bolt-text); }
 .md-key { color: var(--mac-row); font-size: 12px; }
 .md-sep { height: 1px; background: var(--line); margin: 4px 8px; }
 
@@ -364,7 +366,8 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   color: var(--muted); font-size: 11px; min-width: 4.5rem;
 }
-.icon-state.active { color: var(--bolt); }
+.icon-state.active { color: var(--muted); }
+.icon-state.active svg { color: var(--bolt); }
 @media (max-width: 480px) {
   .icon-states {
     display: grid;
