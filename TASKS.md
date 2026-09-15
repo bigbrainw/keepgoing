@@ -34,3 +34,10 @@
 14. Site: footer gets a fourth link **Buy me a coffee** (plain text link like the others; no yellow BMC badge, no image). Also one small line under the FAQ, above the footer: `Free, MIT. If it saved your trip, buy me a coffee.` — the last three words are the link. Word budget: this adds 11; if the page is over 180, trim elsewhere.
 15. Repo: `.github/FUNDING.yml` with `buy_me_a_coffee: <username>` (the part after `buymeacoffee.com/`) so GitHub shows the Sponsor button. README: one line under the install section `Support: buy me a coffee → <url>`.
 16. App: About panel credits line becomes `Open source, MIT · github.com/bigbrainw/keepgoing · buymeacoffee.com/<username>` (About panel is the one place middle dots are fine — it's Apple's own convention there). Rebuild + deploy only if you're already shipping the app in this phase; otherwise leave for the next release.
+
+## D. OG image v2 (before launch)
+Current `site/img/og.png` is mostly empty: small headline top-left, tiny black bolt, system font. Remake with `site/make-og.sh`:
+- 1200×630 @2x. Background `--paper` light. Headline "Close the lid." on line 1 and "Your agent keeps going." on line 2, IBM Plex Sans 600 (self-hosted font files already in `site/`), ~96 px, `--ink`, left-aligned at x=80, vertically centred as a block.
+- Right third: the closed MacBook from the demo (render the demo scene's closed-lid state with the gold hinge glow and the ⚡ badge) — use `screencapture` of a local browser at the demo's closed state if permission allows, else draw it with the same CSS-to-SVG shapes in Swift/CoreGraphics. Bolt is `--bolt` gold, never black.
+- Bottom-left small: `keepgoing-pi.vercel.app` in `--muted`. Nothing else.
+- Verify by opening the PNG; no more than 25 % empty canvas. Deploy, commit, push.
