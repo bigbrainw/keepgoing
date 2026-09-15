@@ -233,9 +233,16 @@ export function initLaptopDemo(canvas, onClosedChange, onFirstFrame) {
   const KEY_PITCH = KEY_W + KEY_GAP;
   const KEY_D = 0.11;
   const KEY_ROW_PITCH = KEY_D + KEY_GAP;
-  const KEY_Y = WELL_FLOOR + 0.006;
-  const keyGeo = new RoundedBoxGeometry(KEY_W, 0.006, KEY_D, 2, 0.008);
-  const keyMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.9 });
+  const KEY_H = 0.014;
+  const KEY_Y = WELL_FLOOR + KEY_H * 0.5 + 0.002;
+  const keyGeo = new RoundedBoxGeometry(KEY_W, KEY_H, KEY_D, 2, 0.01);
+  const keyMat = new THREE.MeshStandardMaterial({
+    color: 0x3a3a40,
+    roughness: 0.75,
+    metalness: 0.05,
+    emissive: 0x1a1a1e,
+    emissiveIntensity: 0.35
+  });
   const keys = new THREE.InstancedMesh(keyGeo, keyMat, 70);
   let ki = 0;
   for (let row = 0; row < 5; row++) {
