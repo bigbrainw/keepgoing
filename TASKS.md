@@ -28,3 +28,9 @@
 11. **Repo metadata**: `gh repo edit --description "Keep your Mac awake and online while Claude Code / Codex run — close the lid, control from your phone." --homepage https://keepgoing-pi.vercel.app --add-topic macos,menu-bar,claude-code,codex,ai-agents,swift,go`.
 12. Lighthouse (`npx lighthouse https://keepgoing-pi.vercel.app --only-categories=performance,accessibility,best-practices,seo --quiet --chrome-flags="--headless"` is allowed): all four ≥ 95, fix what isn't.
 13. Deploy, commit, push. Report: release URL, SHA256s, Lighthouse scores, OG image check (`curl -I` the og:image URL → 200), anything skipped.
+
+## C. Donation link (do after B; URL from Elijah — if `BMC_URL` below is still a placeholder, do everything except the href and leave `TODO_BMC_URL` in place)
+`BMC_URL = TODO_BMC_URL`
+14. Site: footer gets a fourth link **Buy me a coffee** (plain text link like the others; no yellow BMC badge, no image). Also one small line under the FAQ, above the footer: `Free, MIT. If it saved your trip, buy me a coffee.` — the last three words are the link. Word budget: this adds 11; if the page is over 180, trim elsewhere.
+15. Repo: `.github/FUNDING.yml` with `buy_me_a_coffee: <username>` (the part after `buymeacoffee.com/`) so GitHub shows the Sponsor button. README: one line under the install section `Support: buy me a coffee → <url>`.
+16. App: About panel credits line becomes `Open source, MIT · github.com/bigbrainw/keepgoing · buymeacoffee.com/<username>` (About panel is the one place middle dots are fine — it's Apple's own convention there). Rebuild + deploy only if you're already shipping the app in this phase; otherwise leave for the next release.
