@@ -465,7 +465,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func showAbout() {
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "KeepGoing",
-            .credits: NSAttributedString(string: "Open source, MIT. github.com/bigbrainw/keepgoing")
+            .credits: NSAttributedString(string: "Open source, MIT · github.com/bigbrainw/keepgoing · buymeacoffee.com/TODO_BMC_URL")
         ])
     }
 }

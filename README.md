@@ -18,6 +18,8 @@ xattr -d com.apple.quarantine /Applications/KeepGoing.app
 
 Or right-click **KeepGoing.app** → **Open** once to approve it. Then open normally from Applications or the menu bar.
 
+Support: buy me a coffee → TODO_BMC_URL
+
 Full removal:
 
 ```

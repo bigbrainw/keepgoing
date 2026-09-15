@@ -47,13 +47,12 @@
     <section class="hero">
       <div class="wrap hero-inner">
         <div class="hero-copy">
-          <h1>Don't wait for the prompt to finish. Close the lid.</h1>
-          <p class="lead">Your agent finishes the job while you travel. KeepGoing keeps a Mac awake and online for Claude Code and Codex — and reachable from your phone — with the laptop shut.</p>
+          <h1>Close the lid.</h1>
+          <p class="lead">KeepGoing keeps a Mac awake and online for Claude Code and Codex — reachable from your phone with the lid shut.</p>
           <div class="btn-row">
             <a class="btn btn-primary" href="https://github.com/bigbrainw/keepgoing/releases/latest">Download for macOS</a>
             <a class="btn btn-secondary" href="https://github.com/bigbrainw/keepgoing">GitHub</a>
           </div>
-          <p class="hero-meta">Free and open source. macOS 13 or later.</p>
         </div>
         <figure class="macos-shot hero-menu" aria-label="KeepGoing menu bar menu">
           <div aria-hidden="true">
@@ -106,7 +105,7 @@
               <div class="phone">
                 <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
                 <div class="chat">
-                  <div class="msg msg-out">Run the tests and fix what breaks</div>
+                  <div class="msg msg-out">Fix the failing tests</div>
                   <div class="msg msg-in msg-typing">…</div>
                   <div class="msg msg-in msg-fail">No reply</div>
                 </div>
@@ -134,7 +133,7 @@
               <div class="phone">
                 <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
                 <div class="chat">
-                  <div class="msg msg-out">Run the tests and fix what breaks</div>
+                  <div class="msg msg-out">Fix the failing tests</div>
                   <div class="msg msg-in msg-typing">…</div>
                   <div class="msg msg-in msg-ok">Done — 3 tests fixed</div>
                 </div>
@@ -178,7 +177,7 @@
           </figure>
           <figure class="feat-block feat-half alert-shot">
             <div class="fake-alert">
-              <p class="fake-alert-title">Allow KeepGoing to override lid-closed sleep?</p>
+              <p class="fake-alert-title">Override lid-closed sleep?</p>
               <div class="fake-alert-btns"><span>Install</span><span>Cancel</span></div>
             </div>
             <figcaption>Asks for your password once.</figcaption>
@@ -230,7 +229,7 @@
 $ pmset -g | grep SleepDisabled
 SleepDisabled 1                    # still running, on battery</code></pre>
         </div>
-        <p class="caption">MacBook Pro, macOS 26, on battery, replied from a phone through Claude Code.</p>
+        <p class="caption">macOS 26, on battery — replied via Claude Code from a phone.</p>
       </div>
     </section>
 
@@ -242,6 +241,8 @@ SleepDisabled 1                    # still running, on battery</code></pre>
         <details><summary>Why a password?</summary><p>Only root can override lid sleep; the rule allows two pmset commands and nothing else.</p></details>
       </div>
     </section>
+
+    <p class="support wrap">Free, MIT. If it saved your trip, <a href="TODO_BMC_URL">buy me a coffee</a>.</p>
   </main>
 
   <footer class="foot">
@@ -249,6 +250,7 @@ SleepDisabled 1                    # still running, on battery</code></pre>
       <a href="https://github.com/bigbrainw/keepgoing/blob/main/LICENSE">MIT</a>
       <a href="https://github.com/bigbrainw/keepgoing">GitHub</a>
       <a href="https://github.com/bigbrainw/keepgoing/issues">Issues</a>
+      <a href="TODO_BMC_URL">Buy me a coffee</a>
       <span class="foot-version">Version 0.1.1</span>
     </div>
   </footer>
