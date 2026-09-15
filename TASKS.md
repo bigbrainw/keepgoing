@@ -41,3 +41,14 @@ Current `site/img/og.png` is mostly empty: small headline top-left, tiny black b
 - Right third: the closed MacBook from the demo (render the demo scene's closed-lid state with the gold hinge glow and the ⚡ badge) — use `screencapture` of a local browser at the demo's closed state if permission allows, else draw it with the same CSS-to-SVG shapes in Swift/CoreGraphics. Bolt is `--bolt` gold, never black.
 - Bottom-left small: `keepgoing-pi.vercel.app` in `--muted`. Nothing else.
 - Verify by opening the PNG; no more than 25 % empty canvas. Deploy, commit, push.
+
+## D2. OG image v3 — fix
+v2 has the laptop lid drawn as a rotated rectangle overlapping the headline. Do not try to reproduce the 3D CSS transform in CoreGraphics. Draw the closed laptop flat, explicitly, in 1200×630 canvas coordinates (@2x output):
+- Headline block: x=80, max width 640 px (wrap only at the line break given): line 1 "Close the lid." baseline y=250; line 2 "Your agent keeps going." baseline y=350. IBM Plex Sans 600, 84 px, `--ink`. Nothing may overlap x<760.
+- Laptop, centred at x=990, resting on y=430:
+  - base: rounded rect 360×22, corner 6, fill `#d8dfe8`, top edge at y=430; a 120×4 lighter notch centred on its front edge.
+  - lid (closed, lying on base): rounded rect 344×12, corner 4, fill `#2a3340`, centred, sitting directly on the base (y=418–430).
+  - hinge glow: 2 px line, `--bolt` gold (#c8941a), full lid width, at y=430, plus a 10 px soft gold shadow below it (alpha 0.35).
+  - bolt badge: gold circle r=18 centred at (990, 380) with the white bolt path inside; a 30 px soft gold halo (alpha 0.25) around it.
+- Bottom-left `keepgoing-pi.vercel.app`, 22 px, `--muted`, at (80, 560).
+- Verify by opening the PNG: text and laptop must not touch. Deploy, commit, push.
