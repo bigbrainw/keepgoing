@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const header = "ts_iso,lid_closed,thermal_state,cpu_c,low_power,cool_pids,agents,on_battery\n"
+const header = "ts_iso,lid_closed,thermal_state,cpu_c,low_power,cool_pids,agents,working,on_battery\n"
 const maxBytes = 5 * 1024 * 1024
 
 // Row is one CSV sample.
@@ -20,6 +20,7 @@ type Row struct {
 	LowPower    bool
 	CoolPIDs    int
 	Agents      string
+	Working     int
 	OnBattery   bool
 }
 
@@ -57,7 +58,7 @@ func Append(r Row) error {
 		cpu = fmt.Sprintf("%.1f", *r.CPUC)
 	}
 	agents := strings.ReplaceAll(r.Agents, ",", ";")
-	line := fmt.Sprintf("%s,%t,%s,%s,%t,%d,%s,%t\n",
+	line := fmt.Sprintf("%s,%t,%s,%s,%t,%d,%s,%d,%t\n",
 		time.Now().Format(time.RFC3339),
 		r.LidClosed,
 		r.Thermal,
@@ -65,6 +66,7 @@ func Append(r Row) error {
 		r.LowPower,
 		r.CoolPIDs,
 		agents,
+		r.Working,
 		r.OnBattery,
 	)
 	_, err = f.WriteString(line)
@@ -109,12 +111,13 @@ func FormatTable(lines []string) string {
 	if len(lines) == 0 {
 		return "(no samples yet)\n"
 	}
-	cols := [][]string{{"time"}, {"lid"}, {"thermal"}, {"°C"}, {"lp"}, {"cool"}, {"agents"}, {"batt"}}
+	cols := [][]string{{"time"}, {"lid"}, {"thermal"}, {"°C"}, {"lp"}, {"cool"}, {"agents"}, {"work"}, {"batt"}}
 	for _, ln := range lines {
 		p := strings.Split(ln, ",")
 		if len(p) < 8 {
 			continue
 		}
+		hasWorking := len(p) >= 9
 		ts := p[0]
 		if len(ts) > 19 {
 			ts = ts[:19]
@@ -130,7 +133,13 @@ func FormatTable(lines []string) string {
 			ag = ag[:15] + "..."
 		}
 		cols[6] = append(cols[6], ag)
-		cols[7] = append(cols[7], p[7])
+		if hasWorking {
+			cols[7] = append(cols[7], p[7])
+			cols[8] = append(cols[8], p[8])
+		} else {
+			cols[7] = append(cols[7], "")
+			cols[8] = append(cols[8], p[7])
+		}
 	}
 	widths := make([]int, len(cols))
 	for i, col := range cols {

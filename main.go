@@ -359,6 +359,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			LowPower:  lid.LowPowerMode(),
 			CoolPIDs:  coolMgr.PIDCount(),
 			Agents:    procwatch.Summary(procs),
+			Working:   procwatch.WorkingCount(procs),
 			OnBattery: power.OnBattery(),
 		}); err != nil {
 			log.Printf("[thermal] log: %v", err)

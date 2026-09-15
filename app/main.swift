@@ -226,12 +226,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func formatAgents(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty || trimmed == "?" { return "none" }
-        let parts = trimmed.split(separator: " ").map { part -> String in
-            var s = String(part).replacingOccurrences(of: "×", with: " ")
-            s = s.replacingOccurrences(of: "codex-app", with: "codex")
-            return s
+        var s = trimmed.replacingOccurrences(of: "codex-app", with: "codex")
+        if s.count > 40 {
+            s = String(s.prefix(37)) + "..."
         }
-        return parts.joined(separator: " · ")
+        return s
     }
 
     func setTitle(_ item: NSMenuItem, to title: String, store: inout String) {
@@ -558,7 +557,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let path = NSHomeDirectory() + "/Library/Logs/keepgoing/thermal.csv"
         let url = URL(fileURLWithPath: path)
         if !FileManager.default.fileExists(atPath: path) {
-            let hdr = "ts_iso,lid_closed,thermal_state,cpu_c,low_power,cool_pids,agents,on_battery\n"
+            let hdr = "ts_iso,lid_closed,thermal_state,cpu_c,low_power,cool_pids,agents,working,on_battery\n"
             FileManager.default.createFile(atPath: path, contents: Data(hdr.utf8))
         }
         NSWorkspace.shared.open(url)
