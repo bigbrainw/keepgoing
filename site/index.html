@@ -19,7 +19,7 @@
   <meta name="twitter:title" content="Close the lid. Your agent keeps going.">
   <meta name="twitter:image" content="https://keepgoing-pi.vercel.app/img/og.png">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
   <link rel="preload" href="fonts/fonts.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="fonts/fonts.css"></noscript>
   <script type="application/ld+json">
@@ -110,7 +110,7 @@
         <div class="demo-stage" id="demo-stage" aria-live="polite">
           <div class="laptop-stage" id="laptop-stage">
             <div class="laptop-fallback" id="laptop-fallback">
-              <img class="fallback-open" src="img/laptop-open.png" alt="MacBook with lid open, terminal running tests" width="1600" height="1000" loading="eager" decoding="async">
+              <img class="fallback-open" src="img/laptop-open.png" alt="MacBook with lid open, terminal running tests" width="1600" height="1000" loading="lazy" decoding="async">
               <img class="fallback-closed" src="img/laptop-closed.png" alt="MacBook with lid closed, still running" width="1600" height="1000" loading="lazy" decoding="async">
             </div>
             <canvas id="laptop-canvas" hidden aria-label="Interactive 3D MacBook demo"></canvas>
@@ -223,7 +223,7 @@ SleepDisabled 1                    # still running, on battery</code></pre>
       <span class="foot-version">Version 0.1.1</span>
     </div>
   </footer>
-  <script src="demo.js?v=4" defer></script>
+  <script src="demo.js?v=9" defer></script>
   <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

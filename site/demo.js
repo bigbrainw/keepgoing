@@ -12,8 +12,9 @@
   var closed = false;
   var laptop3d = null;
   var bannerTimer = null;
-  var canLoad = false;
   var loading = false;
+  var modPromise = null;
+  var initPromise = null;
   var useFallback = reduced || !hasWebGL();
 
   function hasWebGL() {
@@ -67,64 +68,77 @@
   }
 
   function revealCanvas() {
-    if (!canvas || !fallback) return;
-    fallback.hidden = true;
-    canvas.hidden = false;
     stage.classList.add('is-3d');
+    if (canvas) canvas.hidden = false;
   }
 
-  function load3d() {
-    if (laptop3d || useFallback || loading) return Promise.resolve(laptop3d);
+  function prefetch3d() {
+    if (!modPromise) modPromise = import('./demo-3d.js');
+    return modPromise;
+  }
+
+  function init3d() {
+    if (laptop3d || useFallback) return Promise.resolve(laptop3d);
+    if (initPromise) return initPromise;
     loading = true;
-    return import('./demo-3d.js').then(function (mod) {
-      return mod.initLaptopDemo(canvas, onLidClosed);
+    initPromise = prefetch3d().then(function (mod) {
+      return mod.initLaptopDemo(canvas, onLidClosed, revealCanvas);
     }).then(function (api) {
       laptop3d = api;
       loading = false;
-      revealCanvas();
       window.__laptopDemo = api;
       window.__laptopReady = true;
+      if (closed) api.setClosed(true, true);
       return api;
     }).catch(function () {
       loading = false;
+      initPromise = null;
       useFallback = true;
       return null;
     });
+    return initPromise;
   }
 
-  function activate3d() {
-    if (useFallback || !canLoad) return Promise.resolve(null);
-    return load3d();
+  function scheduleInit3d() {
+    if (laptop3d || useFallback || initPromise) return;
+    var run = function () { init3d(); };
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(run, { timeout: 8000 });
+    } else {
+      window.setTimeout(run, 2000);
+    }
   }
 
   btn.addEventListener('click', function () {
-    var next = !closed;
-    if (!laptop3d && !useFallback && canLoad) {
-      activate3d().then(function (api) {
-        if (api) applyClosed(next, reduced);
-        else applyClosed(next, reduced);
-      });
+    if (!useFallback && !laptop3d) {
+      init3d().then(function () { applyClosed(!closed, reduced); });
       return;
     }
-    applyClosed(next, reduced);
+    applyClosed(!closed, reduced);
   });
 
-  if (!useFallback && laptopStage && canvas) {
+  function attachScrollBoot() {
+    if (useFallback || !laptopStage || !canvas || attachScrollBoot.done) return;
+    attachScrollBoot.done = true;
     if ('IntersectionObserver' in window) {
       var obs = new IntersectionObserver(function (entries) {
         if (entries[0].isIntersecting) {
-          canLoad = true;
           obs.disconnect();
+          prefetch3d();
+          scheduleInit3d();
         }
-      }, { rootMargin: '200px' });
+      }, { rootMargin: '300px' });
       obs.observe(laptopStage);
     } else {
-      canLoad = true;
+      prefetch3d();
+      scheduleInit3d();
     }
-    laptopStage.addEventListener('pointerdown', function () {
-      if (!laptop3d && canLoad) activate3d();
-    }, { once: true });
   }
+  attachScrollBoot.done = false;
+
+  window.addEventListener('load', function () {
+    window.setTimeout(attachScrollBoot, 5000);
+  });
 
   document.querySelectorAll('.cmd-wrap pre code').forEach(function (code) {
     var wrap = code.closest('.cmd-wrap');
