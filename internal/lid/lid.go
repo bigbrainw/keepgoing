@@ -123,3 +123,17 @@ func SetLowPower(enable bool) error {
 	}
 	return nil
 }
+
+// Closed reports whether the MacBook lid is shut (ioreg AppleClamshellState).
+func Closed() bool {
+	out, err := exec.Command("ioreg", "-r", "-k", "AppleClamshellState", "-d", "4").Output()
+	if err != nil {
+		return false
+	}
+	for _, ln := range strings.Split(string(out), "\n") {
+		if strings.Contains(ln, "AppleClamshellState") && strings.Contains(ln, "Yes") {
+			return true
+		}
+	}
+	return false
+}

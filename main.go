@@ -248,6 +248,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	awakeSince := time.Time{}
 	var screenFired bool
 	var lastIdle float64
+	lidClosed := lid.Closed()
 
 	// lid mode: flip pmset disablesleep together with the awake assertion.
 	lidOK := saved.LidMode && lid.Available()
@@ -281,6 +282,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			"lid_mode":       saved.LidMode,
 			"lid_ready":      lidOK,
 			"sleep_disabled": lid.SleepDisabled(),
+			"lid_closed":     lidClosed,
 			"screen_off_after": saved.ScreenOffAfter,
 			"idle_seconds":     lastIdle,
 		}
@@ -356,6 +358,15 @@ func cmdDaemon(c cfg, saved config.Config) int {
 				since = co.nw.Since()
 			}
 			wk.Tick(ctx, co.nw.Online(), since)
+		}
+		nowClosed := lid.Closed()
+		if nowClosed != lidClosed {
+			if nowClosed {
+				log.Printf("[lid] closed")
+			} else {
+				log.Printf("[lid] opened")
+			}
+			lidClosed = nowClosed
 		}
 		select {
 		case <-ctx.Done():
