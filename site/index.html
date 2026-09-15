@@ -100,76 +100,27 @@
           <button type="button" class="btn btn-primary demo-btn" id="lid-btn">Close the lid</button>
         </div>
         <div class="demo-stage" id="demo-stage" aria-live="polite">
-          <div class="scene scene-left">
-            <div class="scene-row">
-              <div class="phone phone-claude">
-                <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
-                <div class="phone-appbar">‹&nbsp;&nbsp;Claude Code · keepgoing</div>
-                <div class="phone-body">
-                  <div class="msg-user">Fix the failing tests</div>
-                  <div class="msg-assist msg-typing">
-                    <span class="assist-dot" aria-hidden="true"></span>
-                    <span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-                  </div>
-                  <div class="msg-assist msg-fail">
-                    <span class="assist-dot" aria-hidden="true"></span>
-                    <span class="assist-line">No reply</span>
-                  </div>
-                </div>
+          <div class="photo-stage">
+            <picture class="photo photo-open">
+              <source srcset="img/lid-closing.webp" type="image/webp">
+              <img src="img/lid-closing.jpg" alt="MacBook lid half-closing, held in hand" width="1600" height="952" loading="eager" decoding="async">
+            </picture>
+            <picture class="photo photo-closed">
+              <source srcset="img/lid-closed.webp" type="image/webp">
+              <img src="img/lid-closed.jpg" alt="MacBook lid closed on a desk, plugged in" width="1600" height="1003" loading="lazy" decoding="async">
+            </picture>
+            <div class="ios-banner" id="ios-banner" role="status" aria-hidden="true">
+              <span class="ios-banner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg></span>
+              <div class="ios-banner-text">
+                <span class="ios-banner-title">KeepGoing</span>
+                <span class="ios-banner-body">Still running — Claude Code finished: 3 tests fixed</span>
               </div>
-              <div class="laptop-stage">
-                <div class="laptop">
-                  <div class="lid">
-                    <div class="lid-bezel">
-                      <div class="notch"></div>
-                      <div class="lid-panel panel-left"></div>
-                    </div>
-                  </div>
-                  <div class="base">
-                    <div class="keyboard"></div>
-                    <div class="trackpad"></div>
-                  </div>
-                </div>
-              </div>
+              <span class="ios-banner-time">now</span>
             </div>
-            <p class="scene-cap">Without KeepGoing</p>
-            <p class="scene-result left-result">macOS sleeps in 67 s.</p>
           </div>
-          <div class="scene scene-right">
-            <div class="scene-row">
-              <div class="phone phone-codex">
-                <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
-                <div class="phone-appbar">‹&nbsp;&nbsp;Codex · keepgoing/main</div>
-                <div class="phone-body">
-                  <div class="msg-user">Fix the failing tests</div>
-                  <div class="msg-assist msg-typing">
-                    <span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-                  </div>
-                  <div class="msg-assist msg-ok">
-                    <span class="tool-chip">Ran npm test</span>
-                    <span class="assist-line">Done — 3 tests fixed</span>
-                  </div>
-                </div>
-              </div>
-              <div class="laptop-stage">
-                <div class="hinge-glow"></div>
-                <div class="bolt-badge"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg></div>
-                <div class="laptop">
-                  <div class="lid">
-                    <div class="lid-bezel">
-                      <div class="notch"></div>
-                      <div class="lid-panel panel-right"></div>
-                    </div>
-                  </div>
-                  <div class="base">
-                    <div class="keyboard"></div>
-                    <div class="trackpad"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p class="scene-cap">With KeepGoing</p>
-            <p class="scene-result right-result">Still running.</p>
+          <div class="demo-captions">
+            <span class="demo-cap-left">Lid closed, on battery</span>
+            <span class="demo-cap-right">SleepDisabled 1 — still running</span>
           </div>
         </div>
       </div>

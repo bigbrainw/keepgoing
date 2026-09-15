@@ -2,33 +2,15 @@
   'use strict';
   var btn = document.getElementById('lid-btn');
   var stage = document.getElementById('demo-stage');
+  var banner = document.getElementById('ios-banner');
   if (!btn || !stage) return;
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var closed = false;
-  var timers = [];
-
-  function clearTimers() {
-    timers.forEach(clearTimeout);
-    timers = [];
-  }
 
   function setClosed(next) {
     closed = next;
-    clearTimers();
     stage.classList.toggle('is-closed', closed);
-    stage.classList.remove('phase-typing', 'phase-done');
     btn.textContent = closed ? 'Open the lid' : 'Close the lid';
-    if (!closed) return;
-    if (reduced) {
-      stage.classList.add('phase-typing', 'phase-done');
-      return;
-    }
-    timers.push(setTimeout(function () {
-      stage.classList.add('phase-typing');
-    }, 900));
-    timers.push(setTimeout(function () {
-      stage.classList.add('phase-done');
-    }, 2400));
+    if (banner) banner.setAttribute('aria-hidden', closed ? 'false' : 'true');
   }
 
   btn.addEventListener('click', function () {
