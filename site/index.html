@@ -6,8 +6,8 @@
   <title>Close the lid. Your agent keeps going.</title>
   <meta name="description" content="KeepGoing keeps a Mac awake and online while Claude Code and Codex run — reachable from your phone with the laptop shut.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1419" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f6fa" media="(prefers-color-scheme: light)">
   <meta property="og:title" content="Close the lid. Your agent keeps going.">
   <meta property="og:description" content="KeepGoing keeps a Mac awake and online for Claude Code and Codex.">
   <meta property="og:image" content="https://keepgoing-pi.vercel.app/img/og.png">
@@ -16,6 +16,9 @@
   <meta name="twitter:title" content="Close the lid. Your agent keeps going.">
   <meta name="twitter:image" content="https://keepgoing-pi.vercel.app/img/og.png">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -33,7 +36,7 @@
           </div>
           <p class="hero-meta">macOS 13+ · MIT · 3 MB</p>
         </div>
-        <figure class="macos-shot" aria-label="KeepGoing menu bar menu">
+        <figure class="macos-shot hero-menu" aria-label="KeepGoing menu bar menu">
           <div aria-hidden="true">
           <div class="macos-bar">
             <div class="macos-bar-left"></div>
@@ -73,7 +76,7 @@
     </section>
 
     <section class="demo-section" aria-labelledby="demo-label">
-      <div class="wrap">
+      <div class="wrap demo-wrap">
         <p class="demo-label" id="demo-label">Try it</p>
         <div class="demo-stage" id="demo-stage">
           <div class="scene scene-left">
@@ -142,8 +145,8 @@
     <section class="features">
       <div class="wrap">
         <h2>What it does</h2>
-        <div class="feat-row">
-          <figure class="feat-shot">
+        <div class="feat-grid">
+          <figure class="feat-block feat-wide">
             <div class="icon-states" aria-hidden="true">
               <div class="icon-state active"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg><span>running</span></div>
               <div class="icon-state"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L11 3h1l-1 7h3.5c.49 0 .56.33.47.51L11 21z"/></svg><span>lid will sleep</span></div>
@@ -152,14 +155,14 @@
             </div>
             <figcaption>Watches your agents.</figcaption>
           </figure>
-          <figure class="feat-shot alert-shot">
+          <figure class="feat-block feat-half alert-shot">
             <div class="fake-alert">
               <p class="fake-alert-title">Allow KeepGoing to override lid-closed sleep?</p>
               <div class="fake-alert-btns"><span>Install</span><span>Cancel</span></div>
             </div>
             <figcaption>Asks for your password once.</figcaption>
           </figure>
-          <figure class="feat-shot">
+          <figure class="feat-block feat-half">
             <div class="macos-shot macos-shot--compact">
               <div aria-hidden="true">
               <div class="macos-bar">
