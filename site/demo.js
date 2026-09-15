@@ -42,6 +42,7 @@
     b.className = 'copy-btn';
     b.type = 'button';
     b.textContent = 'copy';
+    b.setAttribute('aria-label', 'Copy command');
     b.addEventListener('click', function () {
       navigator.clipboard.writeText(code.textContent).then(function () {
         b.textContent = 'copied';

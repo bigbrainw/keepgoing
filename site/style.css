@@ -80,6 +80,7 @@ h1 {
   font-size: clamp(2.25rem, 5.5vw, 3.25rem);
   line-height: 1.05; letter-spacing: -0.02em;
   font-weight: 600; margin: 0 0 1rem; max-width: 14ch;
+  text-wrap: balance;
 }
 .lead { color: var(--muted); margin: 0 0 1.5rem; max-width: 38rem; }
 .btn-row { display: flex; flex-wrap: wrap; gap: .625rem; margin-bottom: .75rem; }
@@ -90,7 +91,9 @@ h1 {
   padding: .7rem 1.2rem; border-radius: var(--radius);
   font: 600 .9375rem/1 var(--font); text-decoration: none;
   border: 1px solid var(--line); cursor: pointer;
-  transition: background .15s ease, color .15s ease, border-color .15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s ease, color .15s ease, border-color .15s ease, opacity .15s ease;
 }
 .btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
@@ -319,7 +322,7 @@ h1 {
 
 /* features */
 .features { padding: 3rem 0; border-top: 1px solid var(--line); }
-h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing: -0.02em; }
+h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing: -0.02em; text-wrap: balance; }
 
 .feat-grid {
   display: grid; gap: 1px; background: var(--line);
@@ -355,6 +358,7 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
 
 /* install + proof */
 .install, .proof { padding: 2.5rem 0; border-top: 1px solid var(--line); }
+#install, #faq { scroll-margin-top: 1.5rem; }
 .proof { background: var(--surface); }
 .steps { margin: 0; padding-left: 1.25rem; max-width: 38rem; }
 .steps li { margin-bottom: 1.1rem; padding-left: .25rem; }
@@ -376,6 +380,8 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
   padding: .2rem .45rem; font: 400 .75rem var(--mono);
   background: var(--surface); border: 1px solid var(--line);
   border-radius: 6px; color: var(--muted); cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .copy-btn:hover { color: var(--ink); border-color: var(--bolt); }
 @media (min-width: 641px) {
@@ -391,6 +397,7 @@ h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 1.25rem; letter-spacing:
 }
 .faq summary {
   padding: .9rem 0; cursor: pointer; font-weight: 600; list-style: none;
+  touch-action: manipulation;
 }
 .faq summary::-webkit-details-marker { display: none; }
 .faq p { margin: 0 0 1rem; color: var(--muted); font-size: .9375rem; max-width: 38rem; }
