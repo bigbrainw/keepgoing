@@ -218,13 +218,14 @@ export function initLaptopDemo(canvas, onClosedChange, onFirstFrame) {
   base.receiveShadow = true;
   laptop.add(base);
 
-  const WELL_DEPTH = 0.008;
-  const WELL_TOP = 0.094;
+  const DECK_TOP = 0.10;
+  const WELL_DEPTH = 0.004;
+  const WELL_FLOOR = DECK_TOP - WELL_DEPTH;
   const kbWell = new THREE.Mesh(
     new RoundedBoxGeometry(2.5, WELL_DEPTH, 0.8, 2, 0.002),
     new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.95 })
   );
-  kbWell.position.set(0, WELL_TOP - WELL_DEPTH * 0.5, 0.1);
+  kbWell.position.set(0, WELL_FLOOR + WELL_DEPTH * 0.5, 0.1);
   laptop.add(kbWell);
 
   const KEY_W = 0.13;
@@ -232,7 +233,7 @@ export function initLaptopDemo(canvas, onClosedChange, onFirstFrame) {
   const KEY_PITCH = KEY_W + KEY_GAP;
   const KEY_D = 0.11;
   const KEY_ROW_PITCH = KEY_D + KEY_GAP;
-  const KEY_Y = WELL_TOP - WELL_DEPTH + 0.006;
+  const KEY_Y = WELL_FLOOR + 0.006;
   const keyGeo = new RoundedBoxGeometry(KEY_W, 0.006, KEY_D, 2, 0.008);
   const keyMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.9 });
   const keys = new THREE.InstancedMesh(keyGeo, keyMat, 70);
@@ -253,7 +254,7 @@ export function initLaptopDemo(canvas, onClosedChange, onFirstFrame) {
     new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.85 })
   );
   trackpad.rotation.x = -Math.PI / 2;
-  trackpad.position.set(0, 0.0958, 0.55);
+  trackpad.position.set(0, DECK_TOP + 0.001, 0.55);
   laptop.add(trackpad);
 
   const footGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 12);
