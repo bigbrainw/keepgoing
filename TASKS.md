@@ -61,3 +61,14 @@ Replace the generic iMessage phone screens in the lid demo with recreations of t
 - Phone frame unchanged (rounded 40, 1.5 px border). Status bar keeps 9:41 + signal.
 - Captions under laptops stay: *Without KeepGoing — macOS sleeps in 67 s.* / *With KeepGoing — Still running.* Word budget: "Fix the failing tests" is shorter than before; fine.
 - Deploy, commit, push, screenshot the closed state at 1280 and report.
+
+## F. Demo rebuilt around real photos (replaces section E — Elijah: the CSS phone screens are "very ugly")
+Assets are already in `site/img/`: `lid-closing.{webp,jpg}` (1600×952, lid half-shut, held in hand) and `lid-closed.{webp,jpg}` (1600×1003, shut on a desk, plugged in). EXIF stripped. Use `<picture>` with webp + jpg fallback, explicit width/height, `loading="eager"` for the first, `lazy` for the second.
+
+New demo = one photo stage, no CSS laptops, no CSS phone chat screens. Delete `.laptop`, `.phone` markup and CSS; keep `demo.js` only for the toggle logic.
+- Stage: full content width, 16:10, rounded 16, overflow hidden. Shows `lid-closing` by default.
+- Button **Close the lid** (same place: header row right of "Try it" on desktop, full-width below on mobile). Click → crossfade to `lid-closed` (600 ms), and an iOS-style notification banner slides down from the top of the photo (dark translucent, 14 px, rounded 18, 1 px border white/10%): left a 28 px gold-bolt circle, title **KeepGoing**, body **Still running — Claude Code finished: 3 tests fixed**, right "now". That banner is the *only* UI element; it must look like a real iOS banner (SF-like system font stack, 12 px title 600 / 13 px body).
+- Two captions under the stage, left/right, mono 13 px: left **Lid closed, on battery** · right **SleepDisabled 1 — still running**. Button becomes **Open the lid** → reverse.
+- `prefers-reduced-motion`: instant swap, no slide.
+- Everything else on the page unchanged. Word budget unaffected (fewer words than before).
+- Verify at 1280 and 390, both schemes, deploy, commit, push, screenshot the closed state.
