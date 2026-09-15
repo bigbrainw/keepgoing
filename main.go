@@ -30,8 +30,10 @@ import (
 
 	"github.com/elijah/keepgoing/internal/agents"
 	"github.com/elijah/keepgoing/internal/awake"
+	"github.com/elijah/keepgoing/internal/agentsignal"
 	"github.com/elijah/keepgoing/internal/config"
 	"github.com/elijah/keepgoing/internal/cool"
+	"github.com/elijah/keepgoing/internal/hooks"
 	"github.com/elijah/keepgoing/internal/lid"
 	"github.com/elijah/keepgoing/internal/netwatch"
 	"github.com/elijah/keepgoing/internal/power"
@@ -126,6 +128,8 @@ func main() {
 		os.Exit(cmdCool(fs.Args(), saved))
 	case "thermal":
 		os.Exit(cmdThermal(fs.Args()))
+	case "hooks":
+		os.Exit(cmdHooks(fs.Args()))
 	case "screen":
 		os.Exit(cmdScreen(fs.Args(), saved))
 	case "run":
@@ -168,6 +172,7 @@ func usage() {
   keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
   keepgoing cool on|off|status   run cooler with the lid closed (Low Power Mode + efficiency cores)
   keepgoing thermal [--csv]      last 20 lid/thermal/CPU samples (or CSV path)
+  keepgoing hooks install|uninstall|status   opt-in Claude/Codex working-idle hooks
   keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
@@ -181,9 +186,10 @@ daemon flags: -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake -listen -c
 // ---- shared core: netwatch + proxy + tunnel -------------------------------
 
 type core struct {
-	nw   *netwatch.Watcher
-	px   *proxy.Server
-	stop func()
+	nw      *netwatch.Watcher
+	px      *proxy.Server
+	signals *agentsignal.Store
+	stop    func()
 }
 
 func startCore(ctx context.Context, c cfg) (*core, error) {
@@ -191,7 +197,9 @@ func startCore(ctx context.Context, c cfg) (*core, error) {
 	nw := netwatch.New(targets, c.probeEvery, nil)
 	go nw.Run(ctx)
 
+	signals := agentsignal.New()
 	px := proxy.New(proxy.DefaultRoutes, nw, c.holdMax)
+	px.AgentSignals = signals
 	ln, err := net.Listen("tcp", c.listen)
 	if err != nil {
 		return nil, fmt.Errorf("listen %s: %w (already running? `keepgoing status`)", c.listen, err)
@@ -218,7 +226,7 @@ func startCore(ctx context.Context, c cfg) (*core, error) {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 	}
-	return &core{nw: nw, px: px, stop: stop}, nil
+	return &core{nw: nw, px: px, signals: signals, stop: stop}, nil
 }
 
 func signalCtx() (context.Context, context.CancelFunc) {
@@ -255,7 +263,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var holder *awake.Holder
 	var lastSeen time.Time
 	var procs []procwatch.Proc
-	watch := procwatch.NewWatcher(nil)
+	watch := procwatch.NewWatcher(co.signals)
 	awakeSince := time.Time{}
 	var screenFired bool
 	var lastIdle float64
@@ -586,6 +594,35 @@ func cmdCool(args []string, saved config.Config) int {
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, "unknown cool subcommand:", args[0])
+	return 2
+}
+
+// ---- hooks -----------------------------------------------------------------
+
+func cmdHooks(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing hooks install|uninstall|status")
+		return 2
+	}
+	switch args[0] {
+	case "install":
+		if err := hooks.InstallClaude(); err != nil {
+			fmt.Fprintln(os.Stderr, "claude:", err)
+			return 1
+		}
+		return 0
+	case "uninstall":
+		if err := hooks.UninstallClaude(); err != nil {
+			fmt.Fprintln(os.Stderr, "claude:", err)
+			return 1
+		}
+		fmt.Println("removed keepgoing hooks from", hooks.ClaudeSettingsPath())
+		return 0
+	case "status":
+		fmt.Printf("claude_hooks=%v\n", hooks.ClaudeStatus())
+		return 0
+	}
+	fmt.Fprintln(os.Stderr, "unknown hooks subcommand:", args[0])
 	return 2
 }
 

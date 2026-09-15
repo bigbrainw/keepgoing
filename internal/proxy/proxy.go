@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/elijah/keepgoing/internal/agentsignal"
 	"github.com/elijah/keepgoing/internal/netwatch"
 )
 
@@ -61,6 +62,8 @@ type Server struct {
 	thermalState string
 	thermalSince time.Time
 	cpuC         *float64
+
+	AgentSignals *agentsignal.Store
 }
 
 // New builds a Server. holdMax bounds how long a request may be parked.
@@ -94,6 +97,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/_status", s.status)
 	mux.HandleFunc("/_thermal", s.thermal)
+	mux.HandleFunc("/_agent", s.agent)
 	mux.HandleFunc("/_force", s.force) // debug: /_force?offline=1|0|clear
 	mux.HandleFunc("/", s.serve)
 	return mux
@@ -136,6 +140,45 @@ func (s *Server) ThermalSnapshot() (state string, since time.Time, cpuC *float64
 	}
 	s.thermalMu.RUnlock()
 	return state, since, cpuC
+}
+
+func loopbackOnly(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	return host == "127.0.0.1" || host == "::1"
+}
+
+func (s *Server) agent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	if !loopbackOnly(r) {
+		http.Error(w, "loopback only", http.StatusForbidden)
+		return
+	}
+	if s.AgentSignals == nil {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		PID   int    `json:"pid"`
+		Tool  string `json:"tool"`
+		State string `json:"state"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	if body.Tool == "" || (body.State != "working" && body.State != "idle") {
+		http.Error(w, "invalid payload", http.StatusBadRequest)
+		return
+	}
+	s.AgentSignals.Record(body.PID, body.Tool, body.State)
+	log.Printf("[agent] %s pid=%d %s", body.Tool, body.PID, body.State)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) thermal(w http.ResponseWriter, r *http.Request) {
