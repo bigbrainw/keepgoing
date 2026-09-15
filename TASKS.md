@@ -30,3 +30,8 @@ Every tick, if `cmux` exists: `cmux sessions list` → for each `claude|cursor` 
 Config `idle_sleep_after` (minutes, 0 = off, **default 0**). When > 0 and every agent has been idle that long, release the awake assertion + lid override (same path as no-agents), log `[daemon] all agents idle for Nm, allowing sleep`. Re-arm the moment any agent is working again. Menu: checkbox **Allow sleep when agents are idle 30 min** (writes 30/0). README: one paragraph, with the remote-control caveat: an idle Mac asleep can't receive your phone's next message.
 
 ### 7. Build, `go test ./...` (add tests for cputime parsing and the descendant sum), deploy, verify `keepgoing status` shows working/idle counts that make sense (this session's Claude should read working while it types), report with the first `keepgoing thermal` lines showing the new column.
+
+## Phase 10.1 — cool mode is not optional (Elijah)
+- Remove the **Run cooler with lid closed** checkbox from the menu and the `cool_mode` config key. Cool mode is always active whenever lid mode is on: lid closes → Low Power Mode + agents to efficiency cores; opens → restored. `keepgoing cool on|off` goes away; `keepgoing cool status` stays (read-only). `/_status.cool_mode` stays, always `true` when `lid_mode` is true.
+- README table row + site FAQ sentence: state it as behaviour, not an option.
+- Deploy, `keepgoing lid status`, commit, push, report.
