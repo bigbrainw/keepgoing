@@ -66,7 +66,14 @@ func main() {
 		os.Exit(2)
 	}
 	sub, rest := os.Args[1], os.Args[2:]
-	saved, _ := config.Load()
+	saved, cfgErr := config.Load()
+	if cfgErr != nil {
+		if sub != "daemon" {
+			fmt.Fprintf(os.Stderr, "keepgoing: config unreadable: %v\n", cfgErr)
+			os.Exit(1)
+		}
+		log.Printf("[config] unreadable: %v (read-only)", cfgErr)
+	}
 
 	fs := flag.NewFlagSet(sub, flag.ExitOnError)
 	c := cfg{}

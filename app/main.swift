@@ -319,23 +319,42 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if setup { toggleLid() }
     }
 
-    func loadConfig() -> [String: Any] {
-        var j: [String: Any] = [:]
-        if let d = FileManager.default.contents(atPath: configPath()),
-           let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] { j = o }
-        return j
+    var configUnreadable = false
+
+    func loadConfig() -> [String: Any]? {
+        let path = configPath()
+        guard FileManager.default.fileExists(atPath: path) else { return [:] }
+        guard let d = FileManager.default.contents(atPath: path) else { return nil }
+        do {
+            let o = try JSONSerialization.jsonObject(with: d)
+            guard let j = o as? [String: Any] else { return nil }
+            return j
+        } catch {
+            if !configUnreadable {
+                configUnreadable = true
+                let alert = NSAlert()
+                alert.messageText = "Couldn't read settings"
+                alert.informativeText = path
+                alert.runModal()
+            }
+            return nil
+        }
     }
 
     func saveConfig(_ j: [String: Any]) {
         let path = configPath()
         try? FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
-        if let d = try? JSONSerialization.data(withJSONObject: j, options: .prettyPrinted) {
-            FileManager.default.createFile(atPath: path, contents: d, attributes: [.posixPermissions: 0o600])
+        guard let d = try? JSONSerialization.data(withJSONObject: j, options: .prettyPrinted) else { return }
+        FileManager.default.createFile(atPath: path, contents: d, attributes: [.posixPermissions: 0o600])
+        let keys = j.keys.sorted().joined(separator: ", ")
+        let msg = "[config] wrote \(path) (\(keys))\n"
+        if let data = msg.data(using: .utf8) {
+            FileHandle.standardError.write(data)
         }
     }
 
     func setConfigKey(_ key: String, value: Any) {
-        var j = loadConfig()
+        guard var j = loadConfig() else { return }
         j[key] = value
         saveConfig(j)
     }
