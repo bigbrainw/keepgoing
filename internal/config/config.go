@@ -17,18 +17,9 @@ type Config struct {
 	Connect        string `json:"connect,omitempty"`
 	AlwaysAwake    bool   `json:"always_awake,omitempty"`
 	LidMode        bool   `json:"lid_mode,omitempty"`         // keep running with lid closed (needs sudoers rule)
-	CoolMode       *bool  `json:"cool_mode,omitempty"`        // run cooler with lid closed; default true when lid mode on
 	CmuxStatus     *bool  `json:"cmux_status,omitempty"`      // poll cmux for working/idle; default true when cmux exists
 	ScreenOffAfter int    `json:"screen_off_after,omitempty"` // seconds idle before display off; 0 = disabled
 	IdleSleepAfter int    `json:"idle_sleep_after,omitempty"` // minutes all-idle before sleep allowed; 0 = off
-}
-
-// CoolOn reports whether cool mode is enabled (default true when lid mode is on).
-func (c Config) CoolOn() bool {
-	if c.CoolMode != nil {
-		return *c.CoolMode
-	}
-	return c.LidMode
 }
 
 // CmuxOn reports whether cmux status polling is enabled (default true when cmux exists).

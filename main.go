@@ -171,7 +171,7 @@ func usage() {
   keepgoing version                 print release version
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
   keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
-  keepgoing cool on|off|status   run cooler with the lid closed (Low Power Mode + efficiency cores)
+  keepgoing cool status          lid-closed cooling (Low Power Mode + efficiency cores)
   keepgoing thermal [--csv]      last 20 lid/thermal/CPU samples (or CSV path)
   keepgoing hooks install|uninstall|status   opt-in Claude/Codex working-idle hooks
   keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
@@ -275,7 +275,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var allIdleSince time.Time
 	lidClosed := lid.Closed()
 	coolMgr := cool.New()
-	coolOn := saved.LidMode && saved.CoolOn()
+	coolOn := saved.LidMode
 
 	// lid mode: flip pmset disablesleep together with the awake assertion.
 	lidOK := saved.LidMode && lid.Available()
@@ -471,7 +471,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			thermalLogged = true
 		}
 		if coolOn {
-			coolMgr.Tick(ps, lidClosed, coolOn)
+			coolMgr.Tick(ps, lidClosed)
 		}
 		thermal, _, _ := co.px.ThermalSnapshot()
 		if !thermalLogged && thermal != "" && thermal != lastThermalLogged {
@@ -577,30 +577,10 @@ func cmdLid(args []string, saved config.Config) int {
 
 func cmdCool(args []string, saved config.Config) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: keepgoing cool on|off|status")
+		fmt.Fprintln(os.Stderr, "usage: keepgoing cool status")
 		return 2
 	}
 	switch args[0] {
-	case "on":
-		on := true
-		saved.CoolMode = &on
-		if err := config.Save(saved); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		kickDaemon()
-		fmt.Println("cool mode ON: with the lid closed, agents move to efficiency cores and Low Power Mode turns on.")
-		return 0
-	case "off":
-		off := false
-		saved.CoolMode = &off
-		if err := config.Save(saved); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		kickDaemon()
-		fmt.Println("cool mode OFF")
-		return 0
 	case "status":
 		coolPIDs := 0
 		if resp, err := http.Get("http://" + or(saved.Listen, "127.0.0.1:7777") + "/_status"); err == nil {
@@ -612,7 +592,7 @@ func cmdCool(args []string, saved config.Config) int {
 				}
 			}
 		}
-		fmt.Printf("cool_mode=%v low_power=%v cool_pids=%d\n", saved.CoolOn(), lid.LowPowerMode(), coolPIDs)
+		fmt.Printf("cool_mode=%v low_power=%v cool_pids=%d\n", saved.LidMode, lid.LowPowerMode(), coolPIDs)
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, "unknown cool subcommand:", args[0])

@@ -58,9 +58,9 @@ func (m *Manager) Shutdown(setLowPower func(bool) error) {
 	m.LidOpened(setLowPower)
 }
 
-// Tick backgrounds any new agent PIDs while the lid is shut and cool mode is on.
-func (m *Manager) Tick(agents []procwatch.Proc, lidClosed bool, coolOn bool) {
-	if !lidClosed || !coolOn {
+// Tick backgrounds any new agent PIDs while the lid is shut.
+func (m *Manager) Tick(agents []procwatch.Proc, lidClosed bool) {
+	if !lidClosed {
 		return
 	}
 	for _, p := range agents {
