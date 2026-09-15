@@ -29,7 +29,7 @@ sudo rm /etc/sudoers.d/keepgoing   # only if you enabled lid mode
 ## The app
 
 `KeepGoing.app` — menu bar icon. ⚡ = agents running, sleep blocked · 💤 = idle, sleep allowed · wifi-slash = offline, recovering.
-Menu: agents / sleep / network / hotspot state, **Always keep awake**, **Set hotspot…** (SSID + password → Keychain), restart daemon, open log, open at login.
+Menu: agents / sleep / network / hotspot state, **Always keep awake**, **Turn off screen when idle**, **Set hotspot…** (SSID + password → Keychain), restart daemon, open log, open at login.
 
 ```
 ./app/build.sh                      # → dist/KeepGoing.app (Swift UI + bundled Go daemon)
@@ -49,7 +49,8 @@ keepgoing status
 
 | Concern | Behaviour |
 |---|---|
-| Sleep | Scans processes every 5s for `claude`, `codex`, `cursor-agent`/`agent`, and the Codex `app-server` that ChatGPT.app / Codex desktop run threads in (counted while the app is open — phone remote control needs it reachable; quit the app to let the Mac sleep). Any alive → `caffeinate -dims` assertion. None for `-idle-grace` (5m) → released, battery back to normal. `-always` to hold unconditionally. |
+| Sleep | Scans processes every 5s for `claude`, `codex`, `cursor-agent`/`agent`, and the Codex `app-server` that ChatGPT.app / Codex desktop run threads in (counted while the app is open — phone remote control needs it reachable; quit the app to let the Mac sleep). Any alive → `caffeinate -ims` assertion (system sleep blocked, display may sleep). None for `-idle-grace` (5m) → released, battery back to normal. `-always` to hold unconditionally. |
+| Screen | While agents run and you haven't touched the Mac for 2 min, the display sleeps (`pmset displaysleepnow`). The system stays awake. Off by default; menu → Turn off screen when idle. |
 | Wi-Fi | Probes `api.anthropic.com`, `api.openai.com`, `chatgpt.com` every 3s. Offline ≥ 20s → bounce Wi-Fi radio. Still offline 45s later → `networksetup -setairportnetwork` to the configured hotspot (password from login Keychain). Alternates, 45s backoff, resets when online. |
 | Tokens (optional) | Holding proxy on `127.0.0.1:7777` (HTTP) and `:7778` (CONNECT). Export the env below and requests are *parked* while offline instead of failing → no SDK retries, no re-sent context. |
 
@@ -88,6 +89,7 @@ keepgoing install / uninstall
 keepgoing status                       JSON: agents, awake, online, wifi, proxy stats
 keepgoing hotspot set <SSID>           password → Keychain (service keepgoing-hotspot)
 keepgoing lid enable|disable|status    keep running with the lid closed (one-time sudoers rule)
+keepgoing screen off-after <seconds|0>   turn display off after idle while agents run
 keepgoing daemon [flags]               foreground; -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake
 keepgoing run [flags] -- <agent cmd>   optional wrapper: proxy + awake + resume-on-crash for one headless agent
 keepgoing env [-agent claude|codex]
