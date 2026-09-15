@@ -1,36 +1,30 @@
 # keepgoing — task queue for Cursor agent
 
-**Phase 7: design pass on the landing page with the new skills.** `site/` only.
-Live: https://keepgoing-pi.vercel.app. Elijah: keep it few-words, picture-led, demo-centred — but make it look *designed*, not generated.
+**Phase 8: launch prep.** Elijah launches after this. Two halves: the download must be current, and the site must be share-ready.
 
-## Skills — read all three first, in this order
-1. `~/.agents/skills/frontend-design/SKILL.md` — follow its two-pass process (plan → critique against the brief → build). It lists AI-design tells; our current page has several: "TRY IT" tracked all-caps eyebrow, `macOS 13+ · MIT · 3 MB` middle-dot strings, three identical rounded cards, tinted near-black. Remove them.
-2. `~/.agents/skills/design-taste-frontend/SKILL.md` — audit-first for redesigns; run its pre-flight check before shipping.
-3. `~/.agents/skills/web-design-guidelines/SKILL.md` — final audit (a11y, contrast, focus, motion).
-Also still binding: `~/.cursor/skills/landing-page-polish/SKILL.md`, `~/.cursor/skills/native-mac-polish/SKILL.md` (Mac UI recreations use the real strings).
-
-## Brief (the skill asks for one — this is it)
-- Subject: a Mac utility for people who run coding agents and travel. Job: make a visitor understand in 5 s that they can shut the laptop and the agent keeps working, then download.
-- Audience: developers using Claude Code / Codex, on phone or laptop, likely arriving from GitHub/HN/X.
-- Keep: all current copy verbatim (≤ 180 words), the interactive lid demo (it is the memorable thing — spend the boldness there), the three what-it-does pictures, install, proof block, 4 FAQs, footer. Sections may be re-shaped, merged, or re-ordered; nothing added.
-- Free axes for you: palette, typography (one or two families; Google Fonts allowed now, ≤ 2 families, `font-display: swap`, preconnect), layout, how the demo is staged, how the three pictures are presented (not three identical cards), light/dark treatment.
-- Mac feel is fine; Apple-clone is not. Do not use the cream+terracotta or black+acid-green defaults the skill warns about.
+## Skills
+`~/.agents/skills/frontend-design`, `~/.agents/skills/web-design-guidelines`, `~/.cursor/skills/landing-page-polish`. Keep the current design; this is polish, not redesign.
 
 ## Hard rules
-- Static HTML/CSS + the existing vanilla JS. No frameworks. Keep `demo.js` behaviour; restyle freely.
-- Word count ≤ 180 (excluding code blocks, FAQ). State it in the commit.
-- No sudo/pmset/wifi. No git history rewriting. Commit per task, push each.
-- Deploy: `cd site && vercel --prod --yes`.
+- No sudo/pmset/visudo/Wi-Fi. No git history rewriting. Commit per task, push each.
+- App build: `./app/build.sh`; bundle binary stays `keepgoing-cli`. Release: `scripts/release.sh` (ad-hoc signing; no cert yet).
+- After any app deploy: `keepgoing lid status` must print `lid_mode=true`. If not, stop and report.
+- Site deploy: `cd site && vercel --prod --yes`.
+- Word budget on the page stays ≤ 180 (code/FAQ excluded).
 
-## Tasks
-1. **Plan** (no code yet): write `site/DESIGN.md` — tokens (4–6 named hex, both schemes), typefaces + roles, ASCII wireframe for desktop and mobile, 3–5 principles, and the skill's critique: which of your first instincts were generic and what you changed. Commit.
-2. **Build** per the plan. Keep the demo working. Commit.
-3. **Pre-flight** from `design-taste-frontend`, then `web-design-guidelines` audit; fix findings. Commit.
-4. **Verify** at 390 / 820 / 1440, light + dark: no horizontal scroll, demo runs, contrast ≥ 4.5:1, focus visible, reduced-motion respected. Deploy. Report: URL, word count, the DESIGN.md summary, audit findings fixed.
+## A. Release v0.1.1 (the build people will download)
+1. `VERSION` → `0.1.1`. `CHANGELOG.md` (new): 0.1.1 — native menu copy, About panel, screen-off-when-idle, config hardening, caffeinate no longer blocks display sleep; 0.1.0 — first release.
+2. `scripts/release.sh` → `dist/KeepGoing-0.1.1.dmg` + `.zip`. Print SHA256s.
+3. `gh release create v0.1.1 dist/KeepGoing-0.1.1.dmg dist/KeepGoing-0.1.1.zip --title "KeepGoing 0.1.1" --notes-file <the 0.1.1 section>` — **published, not draft** (Elijah asked). Verify `https://github.com/bigbrainw/keepgoing/releases/latest` redirects to v0.1.1.
+4. Deploy the 0.1.1 app to this Mac (rule above), check lid status.
+5. Site: every "0.1.0" → "0.1.1" (footer `Version 0.1.1`, hero menu mock `KeepGoing 0.1.1`). Install step 1: link the dmg directly (`…/releases/download/v0.1.1/KeepGoing-0.1.1.dmg`) and keep the hero button on `releases/latest`.
 
-## Phase 7.1 — nits from review (one commit)
-Reviewed live at 1280 light and 390 dark. Ship-quality. Three small things:
-1. `macOS 13+ · MIT · 3 MB` under the buttons and `MIT · GitHub · Issues · v0.1.0` in the footer are the middle-dot meta strings `frontend-design` calls a tell. Replace with plain sentences/links: under buttons `Free and open source. macOS 13 or later.`; footer: four links separated by spacing, no dots, version as `Version 0.1.0`.
-2. Icon-state strip wraps to 3 + 1 at 390 px ("offline" alone on a second row). Make it 2×2 below 480 px, or shrink labels so four fit.
-3. Copy buttons overlap the code text at 390 px (install command and proof block). On ≤ 480 px put the button below the code block, right-aligned, instead of absolutely positioned inside it.
-Deploy, commit, push, report.
+## B. Site share-readiness
+6. **OG image**: regenerate `site/img/og.png` (1200×630) in the *current* design — same tokens/type as the page: headline "Close the lid. Your agent keeps going." on `--paper`, the gold bolt, small "keepgoing-pi.vercel.app". Update `site/make-og.sh` to produce it. Confirm `<meta property="og:image">` is an absolute URL and add `og:image:width/height`, `twitter:card=summary_large_image`.
+7. **Head**: `<link rel="canonical">`, `<meta name="theme-color">` for both schemes (verify present), JSON-LD `SoftwareApplication` (name, operatingSystem "macOS", applicationCategory "UtilitiesApplication", offers price 0, downloadUrl, softwareVersion 0.1.1, license MIT URL).
+8. **Demo affordance**: at 1440 the "Close the lid" button sits below the fold of the stage; a visitor may not know the scene is interactive. Move the button into the stage header row, right of "Try it", so label and button are visible together; keep it full-width below the scene on mobile.
+9. **Analytics (privacy-safe)**: add Vercel Web Analytics script tag (`<script defer src="/_vercel/insights/script.js"></script>`). Note in the report that Elijah must enable Analytics in the Vercel dashboard for it to record.
+10. **README**: first screen = one line, the site link, the demo GIF or a static PNG of the demo scene (make it: `screencapture` if permitted, else render the demo with the CSS and skip), then Install. Keep the rest.
+11. **Repo metadata**: `gh repo edit --description "Keep your Mac awake and online while Claude Code / Codex run — close the lid, control from your phone." --homepage https://keepgoing-pi.vercel.app --add-topic macos,menu-bar,claude-code,codex,ai-agents,swift,go`.
+12. Lighthouse (`npx lighthouse https://keepgoing-pi.vercel.app --only-categories=performance,accessibility,best-practices,seo --quiet --chrome-flags="--headless"` is allowed): all four ≥ 95, fix what isn't.
+13. Deploy, commit, push. Report: release URL, SHA256s, Lighthouse scores, OG image check (`curl -I` the og:image URL → 200), anything skipped.
