@@ -20,6 +20,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } });
   await page.goto('http://127.0.0.1:8790/');
   await page.locator('#laptop-stage').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(6500);
   await page.waitForFunction(() => window.__laptopReady, null, { timeout: 30000 });
 
   const openUrl = await page.evaluate(async () => {

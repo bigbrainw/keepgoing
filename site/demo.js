@@ -15,6 +15,7 @@
   var loading = false;
   var modPromise = null;
   var initPromise = null;
+  var DEMO_3D_VER = '10';
   var useFallback = reduced || !hasWebGL();
 
   function hasWebGL() {
@@ -73,7 +74,7 @@
   }
 
   function prefetch3d() {
-    if (!modPromise) modPromise = import('./demo-3d.js');
+    if (!modPromise) modPromise = import('./demo-3d.js?v=' + DEMO_3D_VER);
     return modPromise;
   }
 
