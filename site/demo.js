@@ -15,7 +15,7 @@
   var loading = false;
   var modPromise = null;
   var initPromise = null;
-  var DEMO_3D_VER = '12';
+  var DEMO_3D_VER = '13';
   var useFallback = reduced || !hasWebGL();
 
   function hasWebGL() {
