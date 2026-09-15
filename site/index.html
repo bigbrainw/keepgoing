@@ -19,10 +19,9 @@
   <meta name="twitter:title" content="Close the lid. Your agent keeps going.">
   <meta name="twitter:image" content="https://keepgoing-pi.vercel.app/img/og.png">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@400&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@400&display=swap"></noscript>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -253,7 +252,7 @@ SleepDisabled 1                    # still running, on battery</code></pre>
       <span class="foot-version">Version 0.1.1</span>
     </div>
   </footer>
-  <script src="demo.js"></script>
+  <script src="demo.js" defer></script>
   <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
