@@ -29,8 +29,8 @@ sudo rm /etc/sudoers.d/keepgoing   # only if you enabled lid mode
 
 ## The app
 
-`KeepGoing.app` — menu bar icon. ⚡ = agents running, sleep blocked · 💤 = idle, sleep allowed · wifi-slash = offline, recovering.
-Menu: agents / sleep / network / hotspot state, **Always keep awake**, **Turn off screen when idle**, **Set hotspot…** (SSID + password → Keychain), restart daemon, open log, open at login.
+`KeepGoing.app` is a menu bar icon. Icon states: filled bolt = agents running and lid safe; outlined bolt = agents running, lid will sleep; moon = idle, sleep allowed; crossed Wi-Fi = offline, recovering.
+Menu: agents, sleep, lid, network and hotspot status; **Keep awake with lid closed**, **Always keep awake**, **Turn off screen when idle**, **Set hotspot…** (SSID and password go to Keychain); open at login, show log, restart daemon, About, Quit.
 
 ```
 ./app/build.sh                      # → dist/KeepGoing.app (Swift UI + bundled Go daemon)
