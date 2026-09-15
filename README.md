@@ -1,15 +1,14 @@
 # keepgoing
 
-Keeps your Mac **awake** and **online** while coding agents run, so remote
-control from your phone (Claude Code remote control, Codex remote control,
-Cursor) keeps working when you're away from the desk.
+Keeps your Mac awake and online while coding agents run — close the lid, control from your phone.
 
-You launch agents however you already do. keepgoing is a background daemon
-that only makes sure the machine and the Wi-Fi stay up while they're alive.
+**https://keepgoing-pi.vercel.app**
+
+![Close the lid demo](docs/demo.png)
 
 ## Install
 
-Download `KeepGoing-0.1.0.zip` from [Releases](https://github.com/bigbrainw/keepgoing/releases), unzip, and drag **KeepGoing.app** to **Applications**.
+Download [KeepGoing-0.1.1.dmg](https://github.com/bigbrainw/keepgoing/releases/download/v0.1.1/KeepGoing-0.1.1.dmg) from [Releases](https://github.com/bigbrainw/keepgoing/releases) and drag **KeepGoing.app** to **Applications**.
 
 This build is ad-hoc signed and not yet notarised. On first open, macOS may block it:
 
