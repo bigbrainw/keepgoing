@@ -102,12 +102,19 @@
         <div class="demo-stage" id="demo-stage" aria-live="polite">
           <div class="scene scene-left">
             <div class="scene-row">
-              <div class="phone">
+              <div class="phone phone-claude">
                 <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
-                <div class="chat">
-                  <div class="msg msg-out">Fix the failing tests</div>
-                  <div class="msg msg-in msg-typing">…</div>
-                  <div class="msg msg-in msg-fail">No reply</div>
+                <div class="phone-appbar">‹&nbsp;&nbsp;Claude Code · keepgoing</div>
+                <div class="phone-body">
+                  <div class="msg-user">Fix the failing tests</div>
+                  <div class="msg-assist msg-typing">
+                    <span class="assist-dot" aria-hidden="true"></span>
+                    <span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                  </div>
+                  <div class="msg-assist msg-fail">
+                    <span class="assist-dot" aria-hidden="true"></span>
+                    <span class="assist-line">No reply</span>
+                  </div>
                 </div>
               </div>
               <div class="laptop-stage">
@@ -130,12 +137,18 @@
           </div>
           <div class="scene scene-right">
             <div class="scene-row">
-              <div class="phone">
+              <div class="phone phone-codex">
                 <div class="phone-status"><span>9:41</span><svg viewBox="0 0 16 12" width="14" height="10" aria-hidden="true"><rect x="0" y="8" width="2" height="4" fill="currentColor"/><rect x="4" y="5" width="2" height="7" fill="currentColor"/><rect x="8" y="2" width="2" height="10" fill="currentColor"/><rect x="12" y="0" width="2" height="12" fill="currentColor"/></svg></div>
-                <div class="chat">
-                  <div class="msg msg-out">Fix the failing tests</div>
-                  <div class="msg msg-in msg-typing">…</div>
-                  <div class="msg msg-in msg-ok">Done — 3 tests fixed</div>
+                <div class="phone-appbar">‹&nbsp;&nbsp;Codex · keepgoing/main</div>
+                <div class="phone-body">
+                  <div class="msg-user">Fix the failing tests</div>
+                  <div class="msg-assist msg-typing">
+                    <span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                  </div>
+                  <div class="msg-assist msg-ok">
+                    <span class="tool-chip">Ran npm test</span>
+                    <span class="assist-line">Done — 3 tests fixed</span>
+                  </div>
                 </div>
               </div>
               <div class="laptop-stage">
