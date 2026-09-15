@@ -11,6 +11,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	"github.com/elijah/keepgoing/internal/agents"
 	"github.com/elijah/keepgoing/internal/awake"
 	"github.com/elijah/keepgoing/internal/config"
+	"github.com/elijah/keepgoing/internal/cool"
 	"github.com/elijah/keepgoing/internal/lid"
 	"github.com/elijah/keepgoing/internal/netwatch"
 	"github.com/elijah/keepgoing/internal/procwatch"
@@ -118,6 +120,8 @@ func main() {
 		os.Exit(cmdHotspot(fs.Args(), saved))
 	case "lid":
 		os.Exit(cmdLid(fs.Args(), saved))
+	case "cool":
+		os.Exit(cmdCool(fs.Args(), saved))
 	case "screen":
 		os.Exit(cmdScreen(fs.Args(), saved))
 	case "run":
@@ -158,6 +162,7 @@ func usage() {
   keepgoing version                 print release version
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
   keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
+  keepgoing cool on|off|status   run cooler with the lid closed (Low Power Mode + efficiency cores)
   keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
@@ -249,6 +254,8 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var screenFired bool
 	var lastIdle float64
 	lidClosed := lid.Closed()
+	coolMgr := cool.New()
+	coolOn := saved.LidMode && saved.CoolOn()
 
 	// lid mode: flip pmset disablesleep together with the awake assertion.
 	lidOK := saved.LidMode && lid.Available()
@@ -271,6 +278,24 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		// crash recovery: never leave disablesleep stuck on with no agents
 		setLid(false)
 	}
+	setLowPower := func(enable bool) error {
+		if !lidOK {
+			if enable {
+				log.Printf("[cool] low power needs extended sudoers rule — run `keepgoing lid enable`")
+			}
+			return fmt.Errorf("sudoers rule missing")
+		}
+		if err := lid.SetLowPower(enable); err != nil {
+			log.Printf("[cool] %v", err)
+			return err
+		}
+		if enable {
+			log.Printf("[cool] low power mode on")
+		} else {
+			log.Printf("[cool] low power mode off")
+		}
+		return nil
+	}
 
 	co.px.Extra = func() map[string]any {
 		m := map[string]any{
@@ -283,6 +308,9 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			"lid_ready":      lidOK,
 			"sleep_disabled": lid.SleepDisabled(),
 			"lid_closed":     lidClosed,
+			"cool_mode":      coolOn,
+			"low_power":      lid.LowPowerMode(),
+			"cool_pids":      coolMgr.PIDCount(),
 			"screen_off_after": saved.ScreenOffAfter,
 			"idle_seconds":     lastIdle,
 		}
@@ -304,7 +332,10 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		}
 		setLid(false)
 	}
-	defer release()
+	defer func() {
+		coolMgr.Shutdown(setLowPower)
+		release()
+	}()
 
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
@@ -363,10 +394,19 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		if nowClosed != lidClosed {
 			if nowClosed {
 				log.Printf("[lid] closed")
+				if coolOn {
+					coolMgr.LidClosed(ps, setLowPower)
+				}
 			} else {
 				log.Printf("[lid] opened")
+				if coolOn {
+					coolMgr.LidOpened(setLowPower)
+				}
 			}
 			lidClosed = nowClosed
+		}
+		if coolOn {
+			coolMgr.Tick(ps, lidClosed, coolOn)
 		}
 		select {
 		case <-ctx.Done():
@@ -449,6 +489,52 @@ func cmdLid(args []string, saved config.Config) int {
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, "unknown lid subcommand:", args[0])
+	return 2
+}
+
+// ---- cool ------------------------------------------------------------------
+
+func cmdCool(args []string, saved config.Config) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing cool on|off|status")
+		return 2
+	}
+	switch args[0] {
+	case "on":
+		on := true
+		saved.CoolMode = &on
+		if err := config.Save(saved); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		fmt.Println("cool mode ON: with the lid closed, agents move to efficiency cores and Low Power Mode turns on.")
+		return 0
+	case "off":
+		off := false
+		saved.CoolMode = &off
+		if err := config.Save(saved); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		fmt.Println("cool mode OFF")
+		return 0
+	case "status":
+		coolPIDs := 0
+		if resp, err := http.Get("http://" + or(saved.Listen, "127.0.0.1:7777") + "/_status"); err == nil {
+			defer resp.Body.Close()
+			var m map[string]any
+			if json.NewDecoder(resp.Body).Decode(&m) == nil {
+				if n, ok := m["cool_pids"].(float64); ok {
+					coolPIDs = int(n)
+				}
+			}
+		}
+		fmt.Printf("cool_mode=%v low_power=%v cool_pids=%d\n", saved.CoolOn(), lid.LowPowerMode(), coolPIDs)
+		return 0
+	}
+	fmt.Fprintln(os.Stderr, "unknown cool subcommand:", args[0])
 	return 2
 }
 

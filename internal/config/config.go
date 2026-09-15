@@ -16,7 +16,16 @@ type Config struct {
 	Connect        string `json:"connect,omitempty"`
 	AlwaysAwake    bool   `json:"always_awake,omitempty"`
 	LidMode        bool   `json:"lid_mode,omitempty"`         // keep running with lid closed (needs sudoers rule)
+	CoolMode       *bool  `json:"cool_mode,omitempty"`        // run cooler with lid closed; default true when lid mode on
 	ScreenOffAfter int    `json:"screen_off_after,omitempty"` // seconds idle before display off; 0 = disabled
+}
+
+// CoolOn reports whether cool mode is enabled (default true when lid mode is on).
+func (c Config) CoolOn() bool {
+	if c.CoolMode != nil {
+		return *c.CoolMode
+	}
+	return c.LidMode
 }
 
 // Path returns ~/.config/keepgoing/config.json.
