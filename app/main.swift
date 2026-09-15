@@ -13,6 +13,7 @@ struct Status {
     var lidMode = false
     var lidReady = false
     var sleepDisabled = false
+    var screenOffAfter = 0
     var hotspot = ""
     var reachable = false
 }
@@ -32,6 +33,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var renderedNetwork = ""
     var renderedHotspot = ""
     var renderedAlways = false
+    var renderedScreenOff = false
     var renderedLidToggle = false
     var renderedLogin = false
     var renderedStartHidden = true
@@ -45,6 +47,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let hotspotItem = NSMenuItem()
     let lidToggleItem = NSMenuItem(title: "Keep awake with lid closed", action: #selector(toggleLid), keyEquivalent: "")
     let alwaysItem = NSMenuItem(title: "Always keep awake", action: #selector(toggleAlways), keyEquivalent: "")
+    let screenOffItem = NSMenuItem(title: "Turn off screen when idle", action: #selector(toggleScreenOff), keyEquivalent: "")
     let hotspotActionItem = NSMenuItem(title: "Set hotspot…", action: #selector(setHotspot), keyEquivalent: "")
     let loginItem = NSMenuItem(title: "Open at login", action: #selector(toggleLogin), keyEquivalent: "")
     let logItem = NSMenuItem(title: "Show log", action: #selector(openLog), keyEquivalent: "l")
@@ -77,9 +80,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         lidToggleItem.target = self
         alwaysItem.target = self
+        screenOffItem.target = self
         hotspotActionItem.target = self
         menu.addItem(lidToggleItem)
         menu.addItem(alwaysItem)
+        menu.addItem(screenOffItem)
         menu.addItem(hotspotActionItem)
         menu.addItem(.separator())
         loginItem.target = self
@@ -121,6 +126,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 s.lidMode = j["lid_mode"] as? Bool ?? false
                 s.lidReady = j["lid_ready"] as? Bool ?? false
                 s.sleepDisabled = j["sleep_disabled"] as? Bool ?? false
+                s.screenOffAfter = j["screen_off_after"] as? Int ?? 0
                 s.hotspot = j["hotspot"] as? String ?? ""
             }
             DispatchQueue.main.async {
@@ -160,6 +166,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             setTitle(hotspotItem, to: s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)", store: &renderedHotspot)
             setCheck(lidToggleItem, s.lidMode, store: &renderedLidToggle)
             setCheck(alwaysItem, s.always, store: &renderedAlways)
+            setCheck(screenOffItem, s.screenOffAfter > 0, store: &renderedScreenOff)
         } else {
             setTitle(versionItem, to: "Daemon not running", store: &renderedVersion)
             for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem] { it.isHidden = true }
@@ -276,6 +283,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func toggleAlways() {
         setConfigKey("always_awake", value: !status.always)
+        restartDaemon()
+    }
+
+    @objc func toggleScreenOff() {
+        let enabling = status.screenOffAfter == 0
+        run([cli, "screen", "off-after", enabling ? "120" : "0"])
         restartDaemon()
     }
 
