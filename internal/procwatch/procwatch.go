@@ -3,91 +3,46 @@
 package procwatch
 
 import (
-	"bufio"
-	"bytes"
-	"os/exec"
-	"path/filepath"
 	"strings"
+	"time"
 )
-
-// Agent names by executable basename.
-var names = map[string]string{
-	"claude":       "claude",
-	"codex":        "codex",
-	"cursor-agent": "cursor",
-	"agent":        "cursor", // cursor's CLI installs as `agent`
-}
 
 // Proc is one detected agent process.
 type Proc struct {
-	PID   int
-	Agent string
-	Path  string
+	PID          int       `json:"PID"`
+	Agent        string    `json:"Agent"`
+	Path         string    `json:"Path"`
+	CPUPct       float64   `json:"cpu_pct"`
+	Working      bool      `json:"working"`
+	WorkingSince time.Time `json:"working_since"`
 }
 
-// Scan lists agent processes: CLI sessions (claude, codex, cursor) and the
-// Codex app-server that ChatGPT.app / the Codex desktop app run their threads
-// in. The app-server is counted while it exists — phone remote control needs
-// it reachable, so "ChatGPT.app open" means "keep the Mac awake". Renderer
-// helpers, updaters and other bundle internals are ignored.
-func Scan() ([]Proc, error) {
-	out, err := exec.Command("ps", "-axo", "pid=,args=").Output()
-	if err != nil {
-		return nil, err
-	}
-	var procs []Proc
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	for sc.Scan() {
-		f := strings.Fields(sc.Text())
-		if len(f) < 2 {
-			continue
-		}
-		exe := f[1]
-		agent, ok := names[filepath.Base(exe)]
-		if !ok {
-			continue
-		}
-		if agent == "codex" && isAppServer(f[2:]) {
-			agent = "codex-app"
-		} else if strings.Contains(exe, ".app/Contents/") {
-			continue
-		}
-		pid := 0
-		for _, c := range f[0] {
-			pid = pid*10 + int(c-'0')
-		}
-		procs = append(procs, Proc{PID: pid, Agent: agent, Path: exe})
-	}
-	return procs, nil
-}
-
-// isAppServer reports whether a codex invocation is `codex … app-server …`
-// (the long-lived host for desktop-app and remote-control threads).
-func isAppServer(args []string) bool {
-	for _, a := range args {
-		if a == "app-server" {
-			return true
-		}
-	}
-	return false
-}
-
-// Summary returns counts by agent, e.g. "claude×3 codex×1".
+// Summary returns working/idle counts per kind, e.g. "claude 2 working · 12 idle".
 func Summary(p []Proc) string {
-	c := map[string]int{}
-	for _, x := range p {
-		c[x.Agent]++
-	}
-	var parts []string
-	for _, k := range []string{"claude", "codex", "codex-app", "cursor"} {
-		if c[k] > 0 {
-			parts = append(parts, k+"×"+itoa(c[k]))
-		}
-	}
-	if len(parts) == 0 {
+	if len(p) == 0 {
 		return "none"
 	}
-	return strings.Join(parts, " ")
+	kinds := map[string]struct{ working, idle int }{}
+	order := []string{}
+	for _, x := range p {
+		k := displayKind(x.Agent)
+		if _, ok := kinds[k]; !ok {
+			order = append(order, k)
+		}
+		c := kinds[k]
+		if x.Working {
+			c.working++
+		} else {
+			c.idle++
+		}
+		kinds[k] = c
+	}
+	var parts []string
+	for _, k := range order {
+		c := kinds[k]
+		parts = append(parts, k+" "+itoa(c.working)+" working · "+itoa(c.idle)+" idle")
+	}
+	return strings.Join(parts, " · ")
 }
 
 func itoa(i int) string {

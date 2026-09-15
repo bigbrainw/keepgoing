@@ -255,6 +255,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var holder *awake.Holder
 	var lastSeen time.Time
 	var procs []procwatch.Proc
+	watch := procwatch.NewWatcher(nil)
 	awakeSince := time.Time{}
 	var screenFired bool
 	var lastIdle float64
@@ -373,7 +374,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	log.Printf("[daemon] up: always=%v idle-grace=%s lid=%v", c.always, c.idleGrace, lidOK)
 	prev := ""
 	for {
-		ps, err := procwatch.Scan()
+		ps, err := watch.Scan()
 		if err != nil {
 			log.Printf("[daemon] scan: %v", err)
 		}
