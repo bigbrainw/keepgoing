@@ -197,9 +197,10 @@ h1 {
   position: absolute; inset: 0; margin: 0;
   transition: opacity 600ms ease;
 }
-.photo img {
-  width: 100%; height: 100%; display: block; object-fit: cover;
+.photo picture, .photo img {
+  width: 100%; height: 100%; display: block;
 }
+.photo img { object-fit: cover; }
 .photo-closed { opacity: 0; }
 .demo-stage.is-closed .photo-open { opacity: 0; }
 .demo-stage.is-closed .photo-closed { opacity: 1; }
