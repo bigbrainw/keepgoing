@@ -12,14 +12,15 @@ import (
 type Holder struct{ cmd *exec.Cmd }
 
 // Hold starts the inhibitor. No-op on unsupported platforms.
-// On macOS this blocks idle/display/disk sleep. Lid-closed sleep on battery is
-// not preventable from userspace without `pmset disablesleep 1`; see README.
+// On macOS this blocks idle/disk sleep (not display sleep — see internal/screen).
+// Lid-closed sleep on battery is not preventable from userspace without
+// `pmset disablesleep 1`; see README.
 func Hold() *Holder {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		// -d display, -i idle, -m disk, -s AC-system, -w wait for our pid
-		cmd = exec.Command("caffeinate", "-dims", "-w", itoa(os.Getpid()))
+		// -i idle, -m disk, -s AC-system, -w wait for our pid
+		cmd = exec.Command("caffeinate", "-ims", "-w", itoa(os.Getpid()))
 	case "linux":
 		if _, err := exec.LookPath("systemd-inhibit"); err == nil {
 			cmd = exec.Command("systemd-inhibit", "--what=idle:sleep",
