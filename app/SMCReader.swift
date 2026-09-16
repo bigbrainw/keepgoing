@@ -133,17 +133,26 @@ final class SMCReader {
         return t
     }
 
-    func cpuCelsius() -> Double? {
+    private static var cpuKeyNames: [String] {
         #if arch(arm64)
-        let keys = ["Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"]
-        var vals: [Double] = []
-        for k in keys {
-            if let t = readKey(k) { vals.append(t) }
-        }
-        guard !vals.isEmpty else { return nil }
-        return vals.reduce(0, +) / Double(vals.count)
+        return ["Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"]
         #else
-        return readKey("TC0P")
+        return ["TC0P"]
         #endif
+    }
+
+    /// Per-key CPU die readings (empty when SMC unavailable).
+    func cpuKeys() -> [String: Double] {
+        var out: [String: Double] = [:]
+        for k in Self.cpuKeyNames {
+            if let t = readKey(k) { out[k] = t }
+        }
+        return out
+    }
+
+    func cpuCelsius() -> Double? {
+        let keys = cpuKeys()
+        guard !keys.isEmpty else { return nil }
+        return keys.values.reduce(0, +) / Double(keys.count)
     }
 }
