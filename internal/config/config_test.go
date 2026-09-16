@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -11,6 +12,123 @@ func testConfigPath(t *testing.T) string {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	return filepath.Join(home, ".config", "keepgoing", "config.json")
+}
+
+func readConfig(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestHotspotSetPreservesLidMode(t *testing.T) {
+	p := testConfigPath(t)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(`{"lid_mode":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Update(func(c *Config) error {
+		c.HotspotSSID = "Oh yeah"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	b := readConfig(t)
+	if !strings.Contains(b, `"lid_mode": true`) {
+		t.Fatalf("lid_mode dropped: %s", b)
+	}
+	if !strings.Contains(b, `"hotspot_ssid": "Oh yeah"`) {
+		t.Fatalf("hotspot missing: %s", b)
+	}
+}
+
+func TestLidSetPreservesHotspot(t *testing.T) {
+	p := testConfigPath(t)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(`{"hotspot_ssid":"Oh yeah"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Update(func(c *Config) error {
+		c.LidMode = true
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	b := readConfig(t)
+	if !strings.Contains(b, `"lid_mode": true`) {
+		t.Fatalf("lid_mode missing: %s", b)
+	}
+	if !strings.Contains(b, `"hotspot_ssid": "Oh yeah"`) {
+		t.Fatalf("hotspot dropped: %s", b)
+	}
+}
+
+func TestUpdateKeepsUnknownKeys(t *testing.T) {
+	p := testConfigPath(t)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(`{"lid_mode":true,"future_flag":"keep"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Update(func(c *Config) error {
+		c.HotspotSSID = "ssid"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	b := readConfig(t)
+	if !strings.Contains(b, `"future_flag": "keep"`) {
+		t.Fatalf("unknown key dropped: %s", b)
+	}
+}
+
+func TestSalvagePartialJSON(t *testing.T) {
+	p := testConfigPath(t)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(`{"lid_mode":true,"hotspot_ssid":"Oh yeah`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := LoadDetailed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Config.LidMode {
+		t.Fatal("expected salvaged lid_mode=true")
+	}
+	if loaded.Config.HotspotSSID != "Oh yeah" {
+		t.Fatalf("expected salvaged hotspot, got %q", loaded.Config.HotspotSSID)
+	}
+
+	if err := Update(func(c *Config) error {
+		c.ScreenOffAfter = 120
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	b := readConfig(t)
+	if !strings.Contains(b, `"lid_mode": true`) {
+		t.Fatalf("lid_mode lost after update: %s", b)
+	}
+	if !strings.Contains(b, `"hotspot_ssid": "Oh yeah"`) {
+		t.Fatalf("hotspot lost after update: %s", b)
+	}
 }
 
 func TestSaveRefusesEmptyOverwrite(t *testing.T) {
@@ -51,5 +169,37 @@ func TestSaveAllowsEmptyWhenFileEmpty(t *testing.T) {
 	}
 	if err := Save(Config{}); err != nil {
 		t.Fatalf("Save({}) on empty file: %v", err)
+	}
+}
+
+func TestRestoreMissingLidMode(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	state := filepath.Join(home, ".config", "keepgoing", "state.json")
+	if err := os.MkdirAll(filepath.Dir(state), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(state, []byte(`{"lid_mode":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(home, ".config", "keepgoing", "config.json")
+	if err := os.WriteFile(p, []byte(`{"hotspot_ssid":"x"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := LoadDetailed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, restored := RestoreMissingLidMode(loaded)
+	if !restored {
+		t.Fatal("expected restore")
+	}
+	if !cfg.LidMode {
+		t.Fatal("expected lid_mode true")
+	}
+	b := readConfig(t)
+	if !strings.Contains(b, `"lid_mode": true`) {
+		t.Fatalf("config not updated: %s", b)
 	}
 }

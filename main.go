@@ -571,8 +571,10 @@ func cmdLid(args []string, saved config.Config) int {
 				return 1
 			}
 		}
-		saved.LidMode = true
-		if err := config.Save(saved); err != nil {
+		if err := config.Update(func(c *config.Config) error {
+			c.LidMode = true
+			return nil
+		}); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
@@ -581,8 +583,10 @@ func cmdLid(args []string, saved config.Config) int {
 		fmt.Println("Heads-up: a closed laptop under load gets warm; keep it on a surface, not in a bag, and prefer plugged in.")
 		return 0
 	case "disable":
-		saved.LidMode = false
-		if err := config.Save(saved); err != nil {
+		if err := config.Update(func(c *config.Config) error {
+			c.LidMode = false
+			return nil
+		}); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
@@ -703,8 +707,10 @@ func cmdScreen(args []string, saved config.Config) int {
 			fmt.Fprintln(os.Stderr, "seconds must be a non-negative integer")
 			return 2
 		}
-		saved.ScreenOffAfter = n
-		if err := config.Save(saved); err != nil {
+		if err := config.Update(func(c *config.Config) error {
+			c.ScreenOffAfter = n
+			return nil
+		}); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
@@ -745,8 +751,10 @@ func cmdHotspot(args []string, saved config.Config) int {
 		fmt.Fprintln(os.Stderr, "keychain:", err)
 		return 1
 	}
-	saved.HotspotSSID = ssid
-	if err := config.Save(saved); err != nil {
+	if err := config.Update(func(c *config.Config) error {
+		c.HotspotSSID = ssid
+		return nil
+	}); err != nil {
 		fmt.Fprintln(os.Stderr, "config:", err)
 		return 1
 	}
