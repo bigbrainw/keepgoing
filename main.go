@@ -676,6 +676,12 @@ func cmdThermal(args []string) int {
 		return 1
 	}
 	fmt.Print(thermolog.FormatTable(lines))
+	if g, err := thermolog.GapReport(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	} else if g != nil {
+		fmt.Print(thermolog.FormatGapLine(g))
+	}
 	return 0
 }
 
