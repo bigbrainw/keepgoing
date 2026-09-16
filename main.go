@@ -835,7 +835,8 @@ func installAppAgent() int {
   <key>Label</key><string>%s</string>
   <key>ProgramArguments</key><array><string>%s</string></array>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
   <key>ProcessType</key><string>Interactive</string>
   <key>LimitLoadToSessionType</key><array><string>Aqua</string></array>
 </dict></plist>

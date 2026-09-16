@@ -27,6 +27,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var status = Status()
     var timer: Timer?
     var failCount = 0
+    var exitReason = "unknown"
 
     var renderedIcon = ""
     var renderedVersion = ""
@@ -66,6 +67,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let aboutItem = NSMenuItem(title: "About KeepGoing", action: #selector(showAbout), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        appLog("started pid=\(getpid())")
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = symbol("bolt.slash")
         buildMenu()
@@ -114,7 +116,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         aboutItem.target = self
         menu.addItem(aboutItem)
-        let quit = NSMenuItem(title: "Quit KeepGoing", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit KeepGoing (stop autostart)", action: #selector(quitStopAutostart), keyEquivalent: "q")
+        quit.target = self
         menu.addItem(quit)
 
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
@@ -346,9 +349,39 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return (p.terminationStatus, s)
     }
 
+    func appLogPath() -> String {
+        NSHomeDirectory() + "/Library/Logs/keepgoing/app.log"
+    }
+
+    func appLog(_ msg: String) {
+        let path = appLogPath()
+        try? FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(msg)\n"
+        if FileManager.default.fileExists(atPath: path), let h = try? FileHandle(forWritingTo: URL(fileURLWithPath: path)) {
+            h.seekToEndOfFile()
+            h.write(line.data(using: .utf8)!)
+            try? h.close()
+        } else {
+            FileManager.default.createFile(atPath: path, contents: line.data(using: .utf8), attributes: [.posixPermissions: 0o644])
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        appLog("exiting reason=\(exitReason)")
+    }
+
+    @objc func quitStopAutostart() {
+        exitReason = "user quit (stop autostart)"
+        run(["/bin/launchctl", "bootout", "gui/\(getuid())/com.elijah.keepgoing.app"])
+        NSApp.terminate(nil)
+    }
+
     func ensureDaemon() {
         let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(daemonLabel)"])
-        if code != 0 { run([cli, "install"]) }
+        if code != 0 {
+            appLog("daemon missing — running keepgoing install")
+            run([cli, "install"])
+        }
     }
 
     @objc func startDaemon() {
