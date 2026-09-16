@@ -58,10 +58,11 @@ type Server struct {
 	// Extra, if set, is merged into /_status (daemon adds agents/awake/wifi).
 	Extra func() map[string]any
 
-	thermalMu    sync.RWMutex
-	thermalState string
-	thermalSince time.Time
-	cpuC         *float64
+	thermalMu      sync.RWMutex
+	thermalState   string
+	thermalSince   time.Time
+	cpuC           *float64
+	daemonThermal  bool
 
 	AgentSignals *agentsignal.Store
 }
@@ -116,9 +117,13 @@ func (s *Server) StatsSnapshot() Stats {
 	}
 }
 
-// SetThermal stores the latest thermal state and optional CPU °C from the app.
+// SetThermal stores thermal readings from the menu bar app (ignored once daemon owns them).
 func (s *Server) SetThermal(state string, cpuC *float64) {
 	s.thermalMu.Lock()
+	defer s.thermalMu.Unlock()
+	if s.daemonThermal {
+		return
+	}
 	if state != "" && state != s.thermalState {
 		s.thermalState = state
 		s.thermalSince = time.Now()
@@ -127,7 +132,21 @@ func (s *Server) SetThermal(state string, cpuC *float64) {
 		v := *cpuC
 		s.cpuC = &v
 	}
-	s.thermalMu.Unlock()
+}
+
+// SetThermalDaemon stores readings from keepgoing-smc; always wins over the app.
+func (s *Server) SetThermalDaemon(state string, cpuC *float64) {
+	s.thermalMu.Lock()
+	defer s.thermalMu.Unlock()
+	s.daemonThermal = true
+	if state != "" && state != s.thermalState {
+		s.thermalState = state
+		s.thermalSince = time.Now()
+	}
+	if cpuC != nil {
+		v := *cpuC
+		s.cpuC = &v
+	}
 }
 
 // ThermalSnapshot returns the stored thermal state, CPU °C, and when state last changed.

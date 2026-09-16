@@ -46,7 +46,6 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var renderedRestartHidden = false
     var thermalNotified = false
     var thermalTimer: Timer?
-    let smc = SMCReader()
 
     let versionItem = NSMenuItem()
     let agentsItem = NSMenuItem()
@@ -185,6 +184,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             setTitle(netItem, to: s.online ? "Network: online" : "Network: offline — recovering", store: &renderedNetwork)
             setTitle(hotspotItem, to: s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)", store: &renderedHotspot)
             setTitle(thermalItem, to: formatThermal(s), store: &renderedThermal)
+            checkThermalNotify(s.thermal)
             setCheck(lidToggleItem, s.lidMode, store: &renderedLidToggle)
             setCheck(alwaysItem, s.always, store: &renderedAlways)
             setCheck(screenOffItem, s.screenOffAfter > 0, store: &renderedScreenOff)
@@ -265,7 +265,19 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    func checkThermalNotify(_ state: String) {
+        if state == "serious" || state == "critical" {
+            if !thermalNotified {
+                postThermalNotification()
+                thermalNotified = true
+            }
+        } else {
+            thermalNotified = false
+        }
+    }
+
     func startThermalReporting() {
+        // Optional fallback: POST ProcessInfo thermal until daemon owns readings.
         reportThermal()
         NotificationCenter.default.addObserver(
             self,
@@ -282,26 +294,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func reportThermal() {
         let state = thermalName()
-        var body: [String: Any] = ["state": state]
-        if let c = smc?.cpuCelsius() {
-            body["cpu_c"] = c
-        } else {
-            body["cpu_c"] = NSNull()
-        }
+        let body: [String: Any] = ["state": state]
         var req = URLRequest(url: URL(string: "http://127.0.0.1:7777/_thermal")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         URLSession.shared.dataTask(with: req).resume()
-
-        if state == "serious" || state == "critical" {
-            if !thermalNotified {
-                postThermalNotification()
-                thermalNotified = true
-            }
-        } else {
-            thermalNotified = false
-        }
     }
 
     func postThermalNotification() {

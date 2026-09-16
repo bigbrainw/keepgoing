@@ -42,6 +42,7 @@ import (
 	"github.com/elijah/keepgoing/internal/proxy"
 	"github.com/elijah/keepgoing/internal/runner"
 	"github.com/elijah/keepgoing/internal/screen"
+	"github.com/elijah/keepgoing/internal/smcread"
 	"github.com/elijah/keepgoing/internal/thermolog"
 	"github.com/elijah/keepgoing/internal/tunnel"
 	"github.com/elijah/keepgoing/internal/wifi"
@@ -272,6 +273,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var thermalWarned string
 	var lastThermalLogged string
 	var lastLogAt time.Time
+	var lastSMC time.Time
 	var allIdleSince time.Time
 	lidClosed := lid.Closed()
 	coolMgr := cool.New()
@@ -382,6 +384,20 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		release()
 	}()
 
+	readSMC := func() {
+		sample, ok, err := smcread.Read()
+		if !ok {
+			return
+		}
+		if err != nil {
+			log.Printf("[smc] %v", err)
+			return
+		}
+		co.px.SetThermalDaemon(sample.Thermal, sample.CPUC)
+	}
+	readSMC()
+	lastSMC = time.Now()
+
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	log.Printf("[daemon] up: always=%v idle-grace=%s lid=%v", c.always, c.idleGrace, lidOK)
@@ -481,10 +497,15 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		if thermal == "serious" || thermal == "critical" {
 			if thermal != thermalWarned {
 				log.Printf("[thermal] %s", thermal)
+				smcread.NotifyThermal(thermal)
 				thermalWarned = thermal
 			}
 		} else {
 			thermalWarned = ""
+		}
+		if lastSMC.IsZero() || time.Since(lastSMC) >= 10*time.Second {
+			readSMC()
+			lastSMC = time.Now()
 		}
 		if !thermalLogged && (lastLogAt.IsZero() || time.Since(lastLogAt) >= 30*time.Second) {
 			appendThermalLog()
