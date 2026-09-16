@@ -282,6 +282,9 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var screenFired bool
 	var lastIdle float64
 	var thermalWarned string
+	var thermalHotSince time.Time
+	var cpuHotSince time.Time
+	var thermalEpisodeNotified bool
 	var lastThermalLogged string
 	var lastLogAt time.Time
 	var lastSMC time.Time
@@ -503,7 +506,7 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		if coolOn {
 			coolMgr.Tick(ps, lidClosed)
 		}
-		thermal, _, _ := co.px.ThermalSnapshot()
+		thermal, _, cpuC := co.px.ThermalSnapshot()
 		if !thermalLogged && thermal != "" && thermal != lastThermalLogged {
 			appendThermalLog()
 			thermalLogged = true
@@ -516,6 +519,38 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			}
 		} else {
 			thermalWarned = ""
+		}
+		thermalHot := thermal != "" && thermal != "nominal" && thermal != "unknown"
+		if thermalHot {
+			if thermalHotSince.IsZero() {
+				thermalHotSince = time.Now()
+			}
+		} else {
+			thermalHotSince = time.Time{}
+		}
+		cpuHot := cpuC != nil && *cpuC > 90
+		if cpuHot {
+			if cpuHotSince.IsZero() {
+				cpuHotSince = time.Now()
+			}
+		} else {
+			cpuHotSince = time.Time{}
+		}
+		thermalLong := thermalHot && !thermalHotSince.IsZero() && time.Since(thermalHotSince) >= 5*time.Minute
+		cpuLong := cpuHot && !cpuHotSince.IsZero() && time.Since(cpuHotSince) >= 2*time.Minute
+		if (thermalLong || cpuLong) && !thermalEpisodeNotified {
+			msg := "Mac is hot"
+			if cpuC != nil {
+				msg = fmt.Sprintf("Mac is hot — %.0f °C, throttling", *cpuC)
+			} else if thermal != "" {
+				msg = fmt.Sprintf("Mac is hot — %s, throttling", thermal)
+			}
+			log.Printf("[thermal] notify: %s", msg)
+			smcread.NotifyUser(msg)
+			thermalEpisodeNotified = true
+		}
+		if !thermalHot && !cpuHot {
+			thermalEpisodeNotified = false
 		}
 		if lastSMC.IsZero() || time.Since(lastSMC) >= 10*time.Second {
 			readSMC()
