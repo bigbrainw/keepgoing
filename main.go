@@ -251,6 +251,13 @@ func signalCtx() (context.Context, context.CancelFunc) {
 // ---- daemon ----------------------------------------------------------------
 
 func cmdDaemon(c cfg, saved config.Config) int {
+	if loaded, err := config.LoadDetailed(); err == nil {
+		if restored, ok := config.RestoreMissingLidMode(loaded); ok {
+			saved = restored
+		} else if !loaded.HasLidMode {
+			saved = loaded.Config
+		}
+	}
 	ctx, cancel := signalCtx()
 	defer cancel()
 	co, err := startCore(ctx, c)
@@ -405,6 +412,9 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	log.Printf("[daemon] up: always=%v idle-grace=%s lid=%v", c.always, c.idleGrace, lidOK)
+	if err := config.SaveState(saved.LidMode); err != nil {
+		log.Printf("[config] state: %v", err)
+	}
 	prev := ""
 	for {
 		cmuxPoll.Tick()
