@@ -49,6 +49,7 @@ import (
 )
 
 const label = "com.elijah.keepgoing"
+const appLabel = "com.elijah.keepgoing.app"
 
 var version = "dev"
 
@@ -134,6 +135,8 @@ func main() {
 		os.Exit(cmdHooks(fs.Args()))
 	case "screen":
 		os.Exit(cmdScreen(fs.Args(), saved))
+	case "app":
+		os.Exit(cmdApp(fs.Args()))
 	case "run":
 		if len(cmd) == 0 {
 			fmt.Fprintln(os.Stderr, "keepgoing run: missing command after --")
@@ -176,6 +179,7 @@ func usage() {
   keepgoing thermal [--csv]      last 20 lid/thermal/CPU samples (or CSV path)
   keepgoing hooks install|uninstall|status   opt-in Claude/Codex working-idle hooks
   keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
+  keepgoing app login on|off|status   menu bar app at login (launchd KeepAlive)
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
   keepgoing run [flags] -- claude -p "task" --dangerously-skip-permissions
@@ -766,6 +770,100 @@ func plistPath() string {
 	return filepath.Join(home, "Library", "LaunchAgents", label+".plist")
 }
 
+func appPlistPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "Library", "LaunchAgents", appLabel+".plist")
+}
+
+func keepGoingAppBin() string {
+	if exe, err := os.Executable(); err == nil {
+		exe, _ = filepath.EvalSymlinks(exe)
+		sibling := filepath.Join(filepath.Dir(exe), "KeepGoing")
+		if st, err := os.Stat(sibling); err == nil && !st.IsDir() {
+			return sibling
+		}
+	}
+	home, _ := os.UserHomeDir()
+	for _, p := range []string{
+		filepath.Join(home, "Applications", "KeepGoing.app", "Contents", "MacOS", "KeepGoing"),
+		"/Applications/KeepGoing.app/Contents/MacOS/KeepGoing",
+	} {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
+func installAppAgent() int {
+	appBin := keepGoingAppBin()
+	if appBin == "" {
+		fmt.Fprintln(os.Stderr, "KeepGoing.app not found; install the app bundle first")
+		return 1
+	}
+	if err := os.MkdirAll(filepath.Dir(appPlistPath()), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>%s</string>
+  <key>ProgramArguments</key><array><string>%s</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>LimitLoadToSessionType</key><array><string>Aqua</string></array>
+</dict></plist>
+`, appLabel, appBin)
+	_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), appLabel)).Run()
+	if err := os.WriteFile(appPlistPath(), []byte(plist), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	out, err := exec.Command("launchctl", "bootstrap", fmt.Sprintf("gui/%d", os.Getuid()), appPlistPath()).CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "launchctl bootstrap app: %v %s\n", err, out)
+		return 1
+	}
+	_ = exec.Command("launchctl", "kickstart", "-k", fmt.Sprintf("gui/%d/%s", os.Getuid(), appLabel)).Run()
+	fmt.Printf("installed %s (KeepGoing menu bar)\n", appLabel)
+	return 0
+}
+
+func uninstallAppAgent() int {
+	_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), appLabel)).Run()
+	_ = os.Remove(appPlistPath())
+	fmt.Println("removed", appLabel)
+	return 0
+}
+
+func cmdApp(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing app login on|off|status")
+		return 2
+	}
+	switch args[0] {
+	case "login":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: keepgoing app login on|off|status")
+			return 2
+		}
+		switch args[1] {
+		case "on":
+			return installAppAgent()
+		case "off":
+			return uninstallAppAgent()
+		case "status":
+			_, err := os.Stat(appPlistPath())
+			fmt.Printf("app_login=%v\n", err == nil)
+			return 0
+		}
+	}
+	fmt.Fprintln(os.Stderr, "unknown app subcommand:", args[0])
+	return 2
+}
+
 func cmdInstall() int {
 	exe, err := os.Executable()
 	if err != nil {
@@ -804,6 +902,11 @@ func cmdInstall() int {
 		return 1
 	}
 	fmt.Printf("installed %s\n  binary: %s\n  log:    %s/daemon.log\n  check:  keepgoing status\n", label, exe, logDir)
+	if keepGoingAppBin() != "" {
+		if code := installAppAgent(); code != 0 {
+			return code
+		}
+	}
 	return 0
 }
 
@@ -811,6 +914,7 @@ func cmdUninstall() int {
 	_ = lid.Set(false)
 	_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), label)).Run()
 	_ = os.Remove(plistPath())
+	uninstallAppAgent()
 	fmt.Println("uninstalled", label)
 	fmt.Println("to remove the lid sudoers rule: sudo rm " + lid.SudoersPath)
 	return 0

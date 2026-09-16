@@ -1,10 +1,9 @@
 // KeepGoing menu bar app. Thin UI over the keepgoing daemon.
 import Cocoa
-import ServiceManagement
 import UserNotifications
 
 let statusURL = URL(string: "http://127.0.0.1:7777/_status")!
-let label = "com.elijah.keepgoing"
+let daemonLabel = "com.elijah.keepgoing"
 
 struct Status {
     var agents = "?"
@@ -77,7 +76,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in self.refresh() }
         startThermalReporting()
-        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        loginItem.state = appLoginEnabled() ? .on : .off
         renderedLogin = loginItem.state == .on
     }
 
@@ -194,7 +193,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] { it.isHidden = true }
         }
 
-        let loginOn = SMAppService.mainApp.status == .enabled
+        let loginOn = appLoginEnabled()
         setCheck(loginItem, loginOn, store: &renderedLogin)
 
         let showStart = !up
@@ -348,23 +347,23 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func ensureDaemon() {
-        let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(label)"])
+        let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(daemonLabel)"])
         if code != 0 { run([cli, "install"]) }
     }
 
     @objc func startDaemon() {
-        let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(label)"])
+        let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(daemonLabel)"])
         if code != 0 {
             run([cli, "install"])
         } else {
-            run(["/bin/launchctl", "kickstart", "-k", "gui/\(getuid())/\(label)"])
+            run(["/bin/launchctl", "kickstart", "-k", "gui/\(getuid())/\(daemonLabel)"])
         }
         failCount = 0
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.refresh() }
     }
 
     @objc func restartDaemon() {
-        run(["/bin/launchctl", "kickstart", "-k", "gui/\(getuid())/\(label)"])
+        run(["/bin/launchctl", "kickstart", "-k", "gui/\(getuid())/\(daemonLabel)"])
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.refresh() }
     }
 
@@ -555,14 +554,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.open(url)
     }
 
+    func appLoginPlistPath() -> String {
+        NSHomeDirectory() + "/Library/LaunchAgents/com.elijah.keepgoing.app.plist"
+    }
+
+    func appLoginEnabled() -> Bool {
+        FileManager.default.fileExists(atPath: appLoginPlistPath())
+    }
+
     @objc func toggleLogin() {
-        let svc = SMAppService.mainApp
-        do {
-            if svc.status == .enabled { try svc.unregister() } else { try svc.register() }
-        } catch {
-            showError("Couldn't update login item", detail: error.localizedDescription)
+        if appLoginEnabled() {
+            run([cli, "app", "login", "off"])
+        } else {
+            run([cli, "app", "login", "on"])
         }
-        loginItem.state = svc.status == .enabled ? .on : .off
+        loginItem.state = appLoginEnabled() ? .on : .off
         renderedLogin = loginItem.state == .on
     }
 
