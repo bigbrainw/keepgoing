@@ -12,4 +12,5 @@
   <key>LSUIElement</key><true/>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHumanReadableCopyright</key><string>© 2026 Elijah</string>
+  <key>NSLocationUsageDescription</key><string>KeepGoing needs Location access to see Wi-Fi networks and join your hotspot when you're offline.</string>
 </dict></plist>

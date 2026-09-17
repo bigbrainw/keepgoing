@@ -11,7 +11,7 @@ if [[ ! -f AppIcon.icns ]]; then
 fi
 ( cd .. && go build -ldflags="-linkmode=external -X main.version=${VERSION}" -o "$APP/Contents/MacOS/keepgoing-cli" . )
 swiftc -O -framework IOKit -o "$APP/Contents/MacOS/keepgoing-smc" smc/main.swift SMCReader.swift
-swiftc -O -framework Cocoa -framework UserNotifications -framework IOKit -o "$APP/Contents/MacOS/KeepGoing" main.swift SMCReader.swift
+swiftc -O -framework Cocoa -framework UserNotifications -framework IOKit -framework CoreWLAN -framework CoreLocation -o "$APP/Contents/MacOS/KeepGoing" main.swift SMCReader.swift
 cp Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$APP/Contents/Info.plist"

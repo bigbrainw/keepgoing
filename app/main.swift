@@ -1,6 +1,107 @@
 // KeepGoing menu bar app. Thin UI over the keepgoing daemon.
 import Cocoa
+import CoreLocation
+import CoreWLAN
 import UserNotifications
+
+let hotspotGuidance = "iPhone: Settings → Personal Hotspot → Allow Others to Join. Mac: System Settings → Wi-Fi → Ask to join hotspots → Automatically. The name must match your iPhone's name exactly."
+
+final class WiFiManager: NSObject, CLLocationManagerDelegate {
+    let loc = CLLocationManager()
+    var lastHandledID = 0
+
+    func locationLabel() -> String {
+        switch loc.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse: return "authorized"
+        case .denied, .restricted: return "denied"
+        case .notDetermined: return "not determined"
+        @unknown default: return "unknown"
+        }
+    }
+
+    func ensureLocation() {
+        if loc.authorizationStatus == .notDetermined {
+            loc.delegate = self
+            loc.requestWhenInUseAuthorization()
+        }
+    }
+
+    func handleRequest(_ req: [String: Any], cli: String) {
+        let id = req["id"] as? Int ?? 0
+        guard id > 0, id != lastHandledID else { return }
+        lastHandledID = id
+        ensureLocation()
+        let joinSSID = req["join"] as? String
+        let scanSSID = req["scan"] as? String
+        let ssid = joinSSID ?? scanSSID ?? ""
+        guard !ssid.isEmpty else { return }
+        let doJoin = joinSSID != nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.run(ssid: ssid, id: id, join: doJoin, cli: cli)
+        }
+    }
+
+    func run(ssid: String, id: Int, join: Bool, cli: String) {
+        let locState = locationLabel()
+        guard let iface = CWWiFiClient.shared().interface() else {
+            post(id: id, ok: false, error: "no Wi-Fi interface", visible: false, rssi: 0, location: locState)
+            return
+        }
+        var match: CWNetwork?
+        var rssi = 0
+        do {
+            let nets = try iface.scanForNetworks(withName: ssid)
+            for net in nets where net.ssid == ssid {
+                match = net
+                rssi = net.rssiValue
+                break
+            }
+        } catch {
+            post(id: id, ok: false, error: error.localizedDescription, visible: false, rssi: 0, location: locState)
+            return
+        }
+        guard let network = match else {
+            post(id: id, ok: false, error: "not visible", visible: false, rssi: 0, location: locState)
+            return
+        }
+        if !join {
+            post(id: id, ok: true, error: "", visible: true, rssi: rssi, location: locState)
+            return
+        }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: cli)
+        p.arguments = ["hotspot", "password"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = out
+        var pw = ""
+        do {
+            try p.run()
+            p.waitUntilExit()
+            pw = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            pw = pw.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            post(id: id, ok: false, error: error.localizedDescription, visible: true, rssi: rssi, location: locState)
+            return
+        }
+        do {
+            try iface.associate(to: network, password: pw)
+            post(id: id, ok: true, error: "", visible: true, rssi: rssi, location: locState)
+        } catch {
+            post(id: id, ok: false, error: error.localizedDescription, visible: true, rssi: rssi, location: locState)
+        }
+    }
+
+    func post(id: Int, ok: Bool, error: String, visible: Bool, rssi: Int, location: String) {
+        var body: [String: Any] = ["id": id, "ok": ok, "visible": visible, "rssi": rssi, "location": location]
+        if !error.isEmpty { body["error"] = error }
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:7777/_wifi")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        URLSession.shared.dataTask(with: req).resume()
+    }
+}
 
 let statusURL = URL(string: "http://127.0.0.1:7777/_status")!
 let daemonLabel = "com.elijah.keepgoing"
@@ -28,6 +129,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var timer: Timer?
     var failCount = 0
     var exitReason = "unknown"
+    let wifi = WiFiManager()
 
     var renderedIcon = ""
     var renderedVersion = ""
@@ -149,6 +251,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 s.hotspot = j["hotspot"] as? String ?? ""
                 s.thermal = j["thermal"] as? String ?? ""
                 s.cpuC = j["cpu_c"] as? Double
+                if let wr = j["wifi_request"] as? [String: Any] {
+                    self.wifi.handleRequest(wr, cli: self.cli)
+                }
             }
             DispatchQueue.main.async {
                 if s.reachable {
@@ -550,8 +655,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func setHotspot() {
         let alert = NSAlert()
         alert.messageText = "Join this hotspot when Wi-Fi is lost"
-        alert.informativeText = ""
+        alert.informativeText = hotspotGuidance
         alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Open Wi-Fi settings")
         alert.addButton(withTitle: "Cancel")
         let box = NSStackView(frame: NSRect(x: 0, y: 0, width: 280, height: 56))
         box.orientation = .vertical
@@ -565,10 +671,19 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         box.addArrangedSubview(pw)
         alert.accessoryView = box
         NSApp.activate(ignoringOtherApps: true)
-        guard alert.runModal() == .alertFirstButtonReturn, !ssid.stringValue.isEmpty, !pw.stringValue.isEmpty else { return }
+        let choice = alert.runModal()
+        if choice == .alertSecondButtonReturn {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.wifi-settings-extension") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+        guard choice == .alertFirstButtonReturn, !ssid.stringValue.isEmpty, !pw.stringValue.isEmpty else { return }
         let (code, out) = run([cli, "hotspot", "set", ssid.stringValue], input: pw.stringValue)
         if code != 0 {
             showError("Couldn't save hotspot", detail: out)
+        } else {
+            wifi.ensureLocation()
         }
         restartDaemon()
     }
