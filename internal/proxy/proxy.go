@@ -20,6 +20,7 @@ import (
 
 	"github.com/elijah/keepgoing/internal/agentsignal"
 	"github.com/elijah/keepgoing/internal/netwatch"
+	"github.com/elijah/keepgoing/internal/wifi"
 )
 
 // Route maps a local path prefix to an upstream origin.
@@ -65,6 +66,7 @@ type Server struct {
 	daemonThermal  bool
 
 	AgentSignals *agentsignal.Store
+	WiFiBridge   *wifi.AppBridge
 }
 
 // New builds a Server. holdMax bounds how long a request may be parked.
@@ -99,6 +101,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/_status", s.status)
 	mux.HandleFunc("/_thermal", s.thermal)
 	mux.HandleFunc("/_agent", s.agent)
+	mux.HandleFunc("/_wifi", s.wifi)
+	mux.HandleFunc("/_wifi/request", s.wifiRequest)
+	mux.HandleFunc("/_wifi/result", s.wifiResult)
 	mux.HandleFunc("/_force", s.force) // debug: /_force?offline=1|0|clear
 	mux.HandleFunc("/", s.serve)
 	return mux
@@ -167,6 +172,30 @@ func loopbackOnly(r *http.Request) bool {
 		host = r.RemoteAddr
 	}
 	return host == "127.0.0.1" || host == "::1"
+}
+
+func (s *Server) wifi(w http.ResponseWriter, r *http.Request) {
+	if s.WiFiBridge == nil {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	s.WiFiBridge.HandlePOST(w, r)
+}
+
+func (s *Server) wifiRequest(w http.ResponseWriter, r *http.Request) {
+	if s.WiFiBridge == nil {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	s.WiFiBridge.HandleRequestPOST(w, r)
+}
+
+func (s *Server) wifiResult(w http.ResponseWriter, r *http.Request) {
+	if s.WiFiBridge == nil {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	s.WiFiBridge.HandleResultGET(w, r)
 }
 
 func (s *Server) agent(w http.ResponseWriter, r *http.Request) {
