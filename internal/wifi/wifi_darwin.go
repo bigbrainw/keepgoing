@@ -15,27 +15,50 @@ import (
 
 const keychainService = "keepgoing-hotspot"
 
-// Keeper drives recovery actions with backoff.
+// Recovery schedule (offline duration thresholds).
+const (
+	bounceDelay        = 20 * time.Second  // t+20s: bounce radio once
+	autoJoinWaitStart  = 30 * time.Second  // t+30s: start Instant Hotspot window
+	firstJoinDelay     = 120 * time.Second // t+120s: first join attempt
+	secondJoinDelay    = 240 * time.Second // t+240s: second join attempt
+	repeatJoinInterval = 4 * time.Minute   // every 4 min after t+240s
+	radioBounceInterval = 10 * time.Minute // bounce radio again only every 10 min
+	joinVerifyTimeout  = 25 * time.Second  // poll reachability after join
+	appJoinTimeout     = 30 * time.Second  // wait for app before networksetup fallback
+)
+
+// Keeper drives recovery actions with a schedule that respects Instant Hotspot.
 type Keeper struct {
-	dev         string
-	ssid        string
-	dryRun      bool
-	offlineFor  time.Duration // how long offline before acting
-	lastAction  time.Time
-	stage       int
-	minInterval time.Duration
+	dev      string
+	ssid     string
+	dryRun   bool
+	bridge   *AppBridge
+	onlineFn func() bool
+	now      func() time.Time
+
+	// per-offline-episode state
+	bouncedOnce     bool
+	waitLogged      bool
+	joinAttempts    int
+	lastJoinTry     time.Time
+	lastBounce      time.Time
+	pendingJoinID   int
+	pendingJoinAt   time.Time
 }
 
-// New builds a Keeper. ssid may be empty (bounce only).
-func New(ssid string, dryRun bool) *Keeper {
+// New builds a Keeper. ssid may be empty (bounce only). bridge may be nil.
+func New(ssid string, dryRun bool, bridge *AppBridge) *Keeper {
 	return &Keeper{
-		dev:         device(),
-		ssid:        ssid,
-		dryRun:      dryRun,
-		offlineFor:  20 * time.Second,
-		minInterval: 45 * time.Second,
+		dev:    device(),
+		ssid:   ssid,
+		dryRun: dryRun,
+		bridge: bridge,
+		now:    time.Now,
 	}
 }
+
+// SetOnlineChecker sets the reachability probe used to verify joins.
+func (k *Keeper) SetOnlineChecker(fn func() bool) { k.onlineFn = fn }
 
 // Device returns the Wi-Fi interface name.
 func (k *Keeper) Device() string { return k.dev }
@@ -51,30 +74,122 @@ func (k *Keeper) SSID() string {
 	return ""
 }
 
-// Tick is called by the daemon on every probe. offlineSince is zero when
-// online. Actions escalate: bounce radio → join hotspot → bounce again…
+// LastAction returns the last Wi-Fi recovery action and error for /_status.
+func (k *Keeper) LastAction() (action, err string, at time.Time) {
+	if k.bridge != nil {
+		action, err, at, _ = k.bridge.Status()
+	}
+	return action, err, at
+}
+
+// Tick is called by the daemon on every probe. offlineSince is zero when online.
 func (k *Keeper) Tick(ctx context.Context, online bool, offlineSince time.Time) {
 	if online {
-		k.stage = 0
+		k.reset()
 		return
 	}
-	if time.Since(offlineSince) < k.offlineFor || time.Since(k.lastAction) < k.minInterval {
+	if offlineSince.IsZero() {
 		return
 	}
-	k.lastAction = time.Now()
-	switch {
-	case k.stage%2 == 0:
+	off := k.now().Sub(offlineSince)
+
+	if k.pendingJoinID > 0 {
+		k.pollAppJoin(ctx)
+		return
+	}
+
+	if !k.bouncedOnce && off >= bounceDelay {
 		k.bounce(ctx)
-	case k.ssid != "":
+		k.bouncedOnce = true
+		k.lastBounce = k.now()
+		return
+	}
+
+	if off >= autoJoinWaitStart && off < firstJoinDelay {
+		if !k.waitLogged {
+			log.Printf("[wifi] waiting for macOS to auto-join (Ask to join hotspots = Automatically)")
+			k.waitLogged = true
+		}
+		return
+	}
+
+	if k.shouldTryJoin(off) {
+		k.startJoin(ctx)
+		return
+	}
+
+	if k.bouncedOnce && k.lastBounce.IsZero() == false &&
+		k.now().Sub(k.lastBounce) >= radioBounceInterval {
+		k.bounce(ctx)
+		k.lastBounce = k.now()
+	}
+}
+
+func (k *Keeper) reset() {
+	k.bouncedOnce = false
+	k.waitLogged = false
+	k.joinAttempts = 0
+	k.lastJoinTry = time.Time{}
+	k.lastBounce = time.Time{}
+	k.pendingJoinID = 0
+	k.pendingJoinAt = time.Time{}
+}
+
+func nextJoinThreshold(attempts int) time.Duration {
+	if attempts == 0 {
+		return firstJoinDelay
+	}
+	return secondJoinDelay + time.Duration(attempts-1)*repeatJoinInterval
+}
+
+func (k *Keeper) shouldTryJoin(off time.Duration) bool {
+	if k.ssid == "" {
+		return false
+	}
+	return off >= nextJoinThreshold(k.joinAttempts)
+}
+
+func (k *Keeper) startJoin(ctx context.Context) {
+	k.joinAttempts++
+	k.lastJoinTry = k.now()
+	if k.bridge != nil {
+		log.Printf("[wifi] still offline: requesting app join %q", k.ssid)
+		k.pendingJoinID = k.bridge.RequestJoin(k.ssid)
+		k.pendingJoinAt = k.now()
+		return
+	}
+	k.joinHotspot(ctx)
+}
+
+func (k *Keeper) pollAppJoin(ctx context.Context) {
+	if k.bridge == nil {
+		k.pendingJoinID = 0
+		return
+	}
+	if res, ok := k.bridge.Result(k.pendingJoinID); ok {
+		k.pendingJoinID = 0
+		if res.OK {
+			log.Printf("[wifi] app join %q ok", k.ssid)
+			if k.waitOnline(ctx, joinVerifyTimeout) {
+				log.Printf("[wifi] join %q ok", k.ssid)
+			}
+		} else {
+			log.Printf("[wifi] app join %q failed: %s", k.ssid, firstLine(res.Error))
+			log.Printf("[wifi] falling back to networksetup join %q", k.ssid)
+			k.joinHotspot(ctx)
+		}
+		return
+	}
+	if k.now().Sub(k.pendingJoinAt) >= appJoinTimeout {
+		log.Printf("[wifi] app join %q timed out; falling back to networksetup", k.ssid)
+		k.pendingJoinID = 0
 		k.joinHotspot(ctx)
-	default:
-		k.bounce(ctx)
 	}
-	k.stage++
 }
 
 func (k *Keeper) bounce(ctx context.Context) {
 	log.Printf("[wifi] offline: bouncing %s radio", k.dev)
+	k.setAction("bounce", "")
 	k.run(ctx, "networksetup", "-setairportpower", k.dev, "off")
 	time.Sleep(2 * time.Second)
 	k.run(ctx, "networksetup", "-setairportpower", k.dev, "on")
@@ -83,28 +198,96 @@ func (k *Keeper) bounce(ctx context.Context) {
 func (k *Keeper) joinHotspot(ctx context.Context) {
 	pw, err := Password(k.ssid)
 	if err != nil {
-		log.Printf("[wifi] hotspot %q: no password in keychain (%v); run `keepgoing hotspot set`", k.ssid, err)
+		msg := fmt.Sprintf("no password in keychain (%v); run `keepgoing hotspot set`", err)
+		log.Printf("[wifi] hotspot %q: %s", k.ssid, msg)
+		k.setAction("join", msg)
 		return
 	}
 	log.Printf("[wifi] still offline: joining hotspot %q", k.ssid)
-	k.run(ctx, "networksetup", "-setairportnetwork", k.dev, k.ssid, pw)
+	k.setAction("join", "")
+	out, runErr := k.run(ctx, "networksetup", "-setairportnetwork", k.dev, k.ssid, pw)
+	if runErr != nil {
+		line := firstLine(runErr.Error())
+		if out != "" {
+			line = firstLine(out)
+		}
+		log.Printf("[wifi] join %q failed: %s", k.ssid, line)
+		k.setAction("join", line)
+		return
+	}
+	if k.waitOnline(ctx, joinVerifyTimeout) {
+		log.Printf("[wifi] join %q ok", k.ssid)
+		k.setAction("join_ok", "")
+	} else {
+		k.setAction("join", "still offline after join")
+	}
 }
 
-func (k *Keeper) run(ctx context.Context, name string, args ...string) {
+func (k *Keeper) waitOnline(ctx context.Context, timeout time.Duration) bool {
+	if k.onlineFn == nil {
+		return false
+	}
+	deadline := k.now().Add(timeout)
+	for k.now().Before(deadline) {
+		if k.onlineFn() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(1 * time.Second):
+		}
+	}
+	return false
+}
+
+func (k *Keeper) setAction(action, err string) {
+	if k.bridge != nil {
+		k.bridge.setStatus(action, err)
+	}
+}
+
+func (k *Keeper) run(ctx context.Context, name string, args ...string) (string, error) {
 	if k.dryRun {
 		shown := args
 		if name == "networksetup" && len(args) == 4 && args[0] == "-setairportnetwork" {
 			shown = append(append([]string{}, args[:3]...), "<password>")
 		}
 		log.Printf("[wifi] dry-run: %s %s", name, strings.Join(shown, " "))
-		return
+		return "", nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(cctx, name, args...).CombinedOutput()
+	s := strings.TrimSpace(string(out))
 	if err != nil {
-		log.Printf("[wifi] %s failed: %v %s", name, err, strings.TrimSpace(string(out)))
+		if s != "" {
+			return s, fmt.Errorf("%s", firstLine(s))
+		}
+		return s, err
 	}
+	if joinOutputFailed(s) {
+		return s, fmt.Errorf("%s", firstLine(s))
+	}
+	return s, nil
+}
+
+func joinOutputFailed(output string) bool {
+	lower := strings.ToLower(output)
+	for _, p := range []string{"could not find network", "failed to join", "error"} {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
 }
 
 // Password reads the hotspot password from the login keychain.

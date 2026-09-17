@@ -10,6 +10,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -125,6 +126,8 @@ func main() {
 		os.Exit(0)
 	case "hotspot":
 		os.Exit(cmdHotspot(fs.Args(), saved))
+	case "wifi":
+		os.Exit(cmdWiFi(fs.Args(), saved))
 	case "lid":
 		os.Exit(cmdLid(fs.Args(), saved))
 	case "cool":
@@ -174,6 +177,7 @@ func usage() {
   keepgoing status                  agents, awake, network, wifi, proxy stats
   keepgoing version                 print release version
   keepgoing hotspot set <SSID>      store hotspot password in Keychain; auto-join when offline
+  keepgoing wifi test [--join]      scan for configured hotspot via the menu bar app
   keepgoing lid enable|disable|status|install-script   keep running with the lid closed (one-time admin password)
   keepgoing cool status          lid-closed cooling (Low Power Mode + efficiency cores)
   keepgoing thermal [--csv]      last 20 lid/thermal/CPU samples (or CSV path)
@@ -204,8 +208,10 @@ func startCore(ctx context.Context, c cfg) (*core, error) {
 	go nw.Run(ctx)
 
 	signals := agentsignal.New()
+	bridge := wifi.NewAppBridge()
 	px := proxy.New(proxy.DefaultRoutes, nw, c.holdMax)
 	px.AgentSignals = signals
+	px.WiFiBridge = bridge
 	ln, err := net.Listen("tcp", c.listen)
 	if err != nil {
 		return nil, fmt.Errorf("listen %s: %w (already running? `keepgoing status`)", c.listen, err)
@@ -269,7 +275,8 @@ func cmdDaemon(c cfg, saved config.Config) int {
 
 	var wk *wifi.Keeper
 	if !c.noWifi {
-		wk = wifi.New(saved.HotspotSSID, c.wifiDry)
+		wk = wifi.New(saved.HotspotSSID, c.wifiDry, co.px.WiFiBridge)
+		wk.SetOnlineChecker(co.nw.Online)
 		log.Printf("[wifi] keeper on %s (hotspot=%q dry-run=%v)", wk.Device(), saved.HotspotSSID, c.wifiDry)
 	}
 
@@ -358,6 +365,22 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			m["wifi_device"] = wk.Device()
 			m["wifi_ssid"] = wk.SSID()
 			m["hotspot"] = saved.HotspotSSID
+			action, err, at := wk.LastAction()
+			if action != "" {
+				m["wifi_last_action"] = action
+			}
+			if err != "" {
+				m["wifi_last_error"] = err
+			}
+			if !at.IsZero() {
+				m["wifi_last_action_at"] = at.Format(time.RFC3339)
+			}
+		}
+		if co.px.WiFiBridge != nil {
+			_, _, _, req := co.px.WiFiBridge.Status()
+			if req != nil {
+				m["wifi_request"] = req
+			}
 		}
 		if _, _, cpuC := co.px.ThermalSnapshot(); cpuC != nil {
 			m["cpu_c"] = *cpuC
@@ -776,7 +799,26 @@ func cmdScreen(args []string, saved config.Config) int {
 
 // ---- hotspot ---------------------------------------------------------------
 
+const hotspotGuidance = "iPhone: Settings → Personal Hotspot → Allow Others to Join. Mac: System Settings → Wi-Fi → Ask to join hotspots → Automatically. The name must match your iPhone's name exactly."
+
 func cmdHotspot(args []string, saved config.Config) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing hotspot set <SSID> | password")
+		return 2
+	}
+	if args[0] == "password" {
+		if saved.HotspotSSID == "" {
+			fmt.Fprintln(os.Stderr, "no hotspot configured")
+			return 1
+		}
+		pw, err := wifi.Password(saved.HotspotSSID)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Print(pw)
+		return 0
+	}
 	if len(args) < 2 || args[0] != "set" {
 		fmt.Fprintln(os.Stderr, "usage: keepgoing hotspot set <SSID>   (password read from prompt)")
 		if saved.HotspotSSID != "" {
@@ -804,8 +846,101 @@ func cmdHotspot(args []string, saved config.Config) int {
 		return 1
 	}
 	fmt.Printf("hotspot %q saved (password in Keychain, SSID in %s)\n", ssid, config.Path())
-	fmt.Println("tip: iPhone → Settings → Personal Hotspot → Allow Others to Join = on; Mac → Wi-Fi → Ask to join hotspots = Automatically")
+	fmt.Println(hotspotGuidance)
 	return 0
+}
+
+// ---- wifi ------------------------------------------------------------------
+
+func cmdWiFi(args []string, saved config.Config) int {
+	if len(args) < 1 || args[0] != "test" {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing wifi test [--join]")
+		return 2
+	}
+	doJoin := false
+	for _, a := range args[1:] {
+		if a == "--join" {
+			doJoin = true
+		}
+	}
+	if saved.HotspotSSID == "" {
+		fmt.Fprintln(os.Stderr, "no hotspot configured; run `keepgoing hotspot set <SSID>`")
+		return 1
+	}
+	base := "http://" + or(saved.Listen, "127.0.0.1:7777")
+	if _, err := http.Get(base + "/_status"); err != nil {
+		fmt.Fprintln(os.Stderr, "daemon not running; start KeepGoing or run `keepgoing install`")
+		return 1
+	}
+	body := map[string]string{"scan": saved.HotspotSSID}
+	if doJoin {
+		body = map[string]string{"join": saved.HotspotSSID}
+	}
+	reqBody, _ := json.Marshal(body)
+	resp, err := http.Post(base+"/_wifi/request", "application/json", bytes.NewReader(reqBody))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "wifi request:", err)
+		return 1
+	}
+	defer resp.Body.Close()
+	var idResp struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&idResp); err != nil || idResp.ID == 0 {
+		fmt.Fprintln(os.Stderr, "wifi request: bad response")
+		return 1
+	}
+	deadline := time.Now().Add(45 * time.Second)
+	var result wifi.AppResult
+	for time.Now().Before(deadline) {
+		st, err := http.Get(fmt.Sprintf("%s/_wifi/result?id=%d", base, idResp.ID))
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		if st.StatusCode == http.StatusNotFound {
+			st.Body.Close()
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		_ = json.NewDecoder(st.Body).Decode(&result)
+		st.Body.Close()
+		if result.ID == idResp.ID {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if result.ID != idResp.ID {
+		fmt.Fprintln(os.Stderr, "timed out waiting for KeepGoing app (is it running?)")
+		return 1
+	}
+	loc := result.Location
+	if loc == "" {
+		loc = "unknown"
+	}
+	fmt.Printf("location: %s\n", loc)
+	if loc == "denied" {
+		fmt.Println("fix: System Settings → Privacy & Security → Location Services → KeepGoing → While Using")
+	}
+	if doJoin {
+		if result.OK {
+			fmt.Printf("join %q: ok\n", saved.HotspotSSID)
+		} else {
+			fmt.Printf("join %q: %s\n", saved.HotspotSSID, result.Error)
+			return 1
+		}
+		return 0
+	}
+	if result.Visible {
+		fmt.Printf("hotspot %q: visible (RSSI %d)\n", saved.HotspotSSID, result.RSSI)
+		fmt.Printf("join would use: networksetup -setairportnetwork <device> %q <password>\n", saved.HotspotSSID)
+		return 0
+	}
+	fmt.Printf("hotspot %q: not visible\n", saved.HotspotSSID)
+	if result.Error != "" {
+		fmt.Println(result.Error)
+	}
+	return 1
 }
 
 func readSecret() (string, error) {
