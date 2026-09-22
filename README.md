@@ -54,6 +54,7 @@ keepgoing status
 | Working | CPU-time delta over each agent's process tree, plus opt-in signals from `keepgoing hooks install` (Claude Code hooks, Codex notify) and cmux workspace status. Menu shows `claude 2 working · 12 idle`. |
 | Screen | While agents run and you haven't touched the Mac for 2 min, the display sleeps (`pmset displaysleepnow`). The system stays awake. Off by default; menu → Turn off screen when idle. |
 | Heat | With lid mode on, closing the lid turns on Low Power Mode and moves agents to efficiency cores; both restore when the lid opens. Thermal state shown in the menu; notification at serious. |
+| Overnight | At 23:00 KeepGoing asks whether to stay awake; no answer means sleep. Battery below 25% also releases everything. |
 | Wi-Fi | Probes `api.anthropic.com`, `api.openai.com`, `chatgpt.com` every 3s. Offline ≥ 20s → bounce Wi-Fi radio once. t+30–120s → wait for macOS Instant Hotspot (Wi-Fi → Ask to join hotspots → Automatically). t+120s → menu bar app joins via CoreWLAN (Location permission); falls back to `networksetup` with real error detection. Repeats at t+240s and every 4 min; radio bounce only every 10 min. `keepgoing wifi test` checks visibility without disconnecting. |
 | Tokens (optional) | Holding proxy on `127.0.0.1:7777` (HTTP) and `:7778` (CONNECT). Export the env below and requests are *parked* while offline instead of failing → no SDK retries, no re-sent context. |
 
@@ -97,6 +98,8 @@ keepgoing cool status                  lid-closed cooling (read-only)
 keepgoing thermal [--csv]              last 20 lid/thermal/CPU samples
 keepgoing hooks install|uninstall|status   opt-in Claude/Codex working-idle hooks
 keepgoing screen off-after <seconds|0>   turn display off after idle while agents run
+keepgoing night status|yes|no|ask-at HH:MM|off   overnight prompt (default ask at 23:00)
+keepgoing battery floor <pct|0>            release sleep inhibit below this level on battery
 keepgoing daemon [flags]               foreground; -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake
 keepgoing run [flags] -- <agent cmd>   optional wrapper: proxy + awake + resume-on-crash for one headless agent
 keepgoing env [-agent claude|codex]
