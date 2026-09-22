@@ -34,3 +34,33 @@ Runs through the app: asks it to scan (not join) and prints: Location permission
 - README Wi-Fi row rewritten to describe the new schedule and the two settings. Site FAQ: no change needed unless the word budget allows one clause.
 
 ### 6. Build, `go test ./...`, deploy, verify: `keepgoing wifi test` with the iPhone hotspot page OPEN (ask Elijah to open it) must print `visible` for "Oh yeah"; with it closed, `not visible`. Report both outputs verbatim. Don't run `--join`.
+
+## Phase 13 — overnight prompt + battery guard (Elijah 2026-09-22)
+"Temperature still high, battery drops fast. Around 11 at night it should ask whether to run through the midnight; if no answer, default off."
+
+### Hard rules
+Unchanged: no sudo/pmset -a/visudo yourself; `./app/build.sh`; bundle binary stays `keepgoing-cli`; deploy then `keepgoing lid status` → `lid_mode=true` and `pgrep -x KeepGoing`; strings per `~/.cursor/skills/native-mac-polish/SKILL.md`; commit per task, push, no history rewriting. Don't close the lid. **Don't kill BTLEServer or touch Bluetooth** (separate, unrelated system bug).
+
+### 1. Night window state (Go, `internal/night`)
+Config: `night_ask_at` (string "23:00", empty = feature off, **default "23:00"**), `night_until` (string "07:00"), and runtime state in `state.json`: `night_answer` = `{"date":"2026-09-22","answer":"yes|no","at":ts}`.
+Pure function `Decide(now time.Time, cfg, answer) (mode: run|sleep|ask, reason string)` — unit-tested with a fake clock across: before 23:00, 23:00 with no answer, 23:10 with no answer (→ sleep), answer yes (→ run until `night_until` next morning), answer no, next day resets. Nothing in this package touches the system.
+
+### 2. Daemon behaviour
+- At `night_ask_at`, if any agent is running: ask (task 3), log `[night] asking whether to run overnight`.
+- No answer within **10 min** → treat as **no**: release the awake assertion, `lid.Set(false)`, `lid.SetLowPower(false)`, log `[night] no answer, allowing sleep until HH:MM`. Keep the daemon itself alive (Wi-Fi + logging continue); just stop forcing wakefulness. Re-arm normally at `night_until`.
+- Answer yes → normal behaviour until `night_until`, then ask again only the next night.
+- `/_status`: `night_mode` = `run|sleep|ask|off`, `night_answer`, `night_until_at`.
+
+### 3. The prompt (Swift app)
+`UNUserNotificationCenter` with two actions: **Keep running** / **Let it sleep** (identifier-based, `UNNotificationCategory`). Title `KeepGoing`, body `Keep your Mac awake overnight? Agents are still running. No answer in 10 minutes means sleep.` Tapping an action POSTs `/_night` `{"answer":"yes|no"}`. If notification permission is denied, fall back to a menu-bar flash: set the status item to the `moon.zzz` symbol + menu line `Overnight: asking — choose below`, and add two temporary menu items. Request notification permission on first need only.
+
+### 4. Battery guard (independent of night)
+Config `battery_floor` (percent, default **25**, 0 = off). On battery and at/below the floor: release assertion + lid override + low power off, log `[battery] 24% ≤ floor, allowing sleep`, and notify once. Re-arm when charging or above floor + 5. `/_status.battery_pct`, `battery_floor`. Read battery with `pmset -g batt` (already shell-free? if not, parse it) — no new deps.
+
+### 5. Menu + CLI
+Status group gains one line: `Overnight: on until 7:00` / `off tonight` / `asks at 23:00`. Actions group gains **Run overnight tonight** (checkbox reflecting tonight's answer; toggling writes it). CLI `keepgoing night status|yes|no|ask-at HH:MM|off` and `keepgoing battery floor <pct|0>`.
+
+### 6. README + site
+README: new row "Overnight — at 23:00 KeepGoing asks whether to stay awake; no answer means sleep. Battery below 25% also releases everything." Site FAQ "Battery?" answer updated in one clause. Keep the word budget.
+
+### 7. Build, `go test -ldflags=-linkmode=external ./...`, deploy, verify. Test the decision logic with the fake clock (don't wait for 23:00). Report `keepgoing night status` and `keepgoing status | grep night`.
