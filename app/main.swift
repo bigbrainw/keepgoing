@@ -119,10 +119,12 @@ struct Status {
     var hotspot = ""
     var thermal = ""
     var cpuC: Double?
+    var nightMode = ""
+    var nightAnswer = ""
     var reachable = false
 }
 
-final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
     var item: NSStatusItem!
     var menu = NSMenu()
     var status = Status()
@@ -139,6 +141,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var renderedNetwork = ""
     var renderedHotspot = ""
     var renderedThermal = ""
+    var renderedNight = ""
     var renderedAlways = false
     var renderedScreenOff = false
     var renderedIdleSleep = false
@@ -148,6 +151,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var renderedRestartHidden = false
     var thermalNotified = false
     var thermalTimer: Timer?
+    var lastNightRequestID = 0
+    var nightMenuFallback = false
 
     let versionItem = NSMenuItem()
     let agentsItem = NSMenuItem()
@@ -156,6 +161,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let netItem = NSMenuItem()
     let hotspotItem = NSMenuItem()
     let thermalItem = NSMenuItem()
+    let nightItem = NSMenuItem()
+    let nightYesItem = NSMenuItem(title: "Keep running overnight", action: #selector(nightAnswerYes), keyEquivalent: "")
+    let nightNoItem = NSMenuItem(title: "Let it sleep tonight", action: #selector(nightAnswerNo), keyEquivalent: "")
     let lidToggleItem = NSMenuItem(title: "Keep awake with lid closed", action: #selector(toggleLid), keyEquivalent: "")
     let alwaysItem = NSMenuItem(title: "Always keep awake", action: #selector(toggleAlways), keyEquivalent: "")
     let screenOffItem = NSMenuItem(title: "Turn off screen when idle", action: #selector(toggleScreenOff), keyEquivalent: "")
@@ -175,6 +183,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         buildMenu()
         item.menu = menu
         menu.delegate = self
+        UNUserNotificationCenter.current().delegate = self
+        registerNightCategory()
         ensureDaemon()
         showOnboardingIfNeeded()
         refresh()
@@ -188,11 +198,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         versionItem.isEnabled = false
         menu.addItem(versionItem)
         menu.addItem(.separator())
-        for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] {
+        for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem] {
             it.isEnabled = false
             menu.addItem(it)
         }
         menu.addItem(.separator())
+        nightYesItem.target = self
+        nightNoItem.target = self
+        nightYesItem.isHidden = true
+        nightNoItem.isHidden = true
+        nightItem.isHidden = true
         lidToggleItem.target = self
         alwaysItem.target = self
         screenOffItem.target = self
@@ -203,6 +218,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(screenOffItem)
         menu.addItem(idleSleepItem)
         menu.addItem(hotspotActionItem)
+        menu.addItem(nightYesItem)
+        menu.addItem(nightNoItem)
         menu.addItem(.separator())
         loginItem.target = self
         logItem.target = self
@@ -251,8 +268,20 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 s.hotspot = j["hotspot"] as? String ?? ""
                 s.thermal = j["thermal"] as? String ?? ""
                 s.cpuC = j["cpu_c"] as? Double
+                s.nightMode = j["night_mode"] as? String ?? ""
+                if let na = j["night_answer"] as? [String: Any] {
+                    s.nightAnswer = na["answer"] as? String ?? ""
+                }
                 if let wr = j["wifi_request"] as? [String: Any] {
                     self.wifi.handleRequest(wr, cli: self.cli)
+                }
+                if let nr = j["night_request"] as? [String: Any] {
+                    let id = nr["id"] as? Int ?? 0
+                    DispatchQueue.main.async {
+                        self.handleNightRequest(id: id, mode: s.nightMode)
+                    }
+                } else if s.nightMode != "ask" {
+                    DispatchQueue.main.async { self.clearNightFallback() }
                 }
             }
             DispatchQueue.main.async {
@@ -275,7 +304,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let s = status
         let up = daemonUp
 
-        let icon = statusIcon(up: up, s: s)
+        let icon = nightMenuFallback ? "moon.zzz" : statusIcon(up: up, s: s)
         if icon != renderedIcon {
             item.button?.image = symbol(icon)
             renderedIcon = icon
@@ -285,12 +314,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
             setTitle(versionItem, to: "KeepGoing \(ver)", store: &renderedVersion)
             for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] { it.isHidden = false }
+            nightItem.isHidden = nightMenuFallback || s.nightMode == "off"
             setTitle(agentsItem, to: "Agents: \(formatAgents(s.agents))", store: &renderedAgents)
             setTitle(sleepItem, to: s.awake ? "Sleep: blocked" : "Sleep: allowed — no agents", store: &renderedSleep)
             setTitle(lidItem, to: lidStatus(s), store: &renderedLid)
             setTitle(netItem, to: s.online ? "Network: online" : "Network: offline — recovering", store: &renderedNetwork)
             setTitle(hotspotItem, to: s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)", store: &renderedHotspot)
             setTitle(thermalItem, to: formatThermal(s), store: &renderedThermal)
+            setTitle(nightItem, to: nightStatusLine(s), store: &renderedNight)
             checkThermalNotify(s.thermal)
             setCheck(lidToggleItem, s.lidMode, store: &renderedLidToggle)
             setCheck(alwaysItem, s.always, store: &renderedAlways)
@@ -298,7 +329,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             setCheck(idleSleepItem, s.idleSleepAfter > 0, store: &renderedIdleSleep)
         } else {
             setTitle(versionItem, to: "Daemon not running", store: &renderedVersion)
-            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] { it.isHidden = true }
+            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem] { it.isHidden = true }
         }
 
         let loginOn = appLoginEnabled()
@@ -408,6 +439,101 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         URLSession.shared.dataTask(with: req).resume()
     }
+
+    func nightStatusLine(_ s: Status) -> String {
+        switch s.nightMode {
+        case "run": return "Overnight: on until morning"
+        case "sleep": return "Overnight: off tonight"
+        case "ask": return "Overnight: asks at 23:00"
+        default: return "Overnight: asks at 23:00"
+        }
+    }
+
+    func registerNightCategory() {
+        let yes = UNNotificationAction(identifier: "keepgoing.night.yes", title: "Keep running", options: [])
+        let no = UNNotificationAction(identifier: "keepgoing.night.no", title: "Let it sleep", options: [])
+        let cat = UNNotificationCategory(identifier: "keepgoing.night", actions: [yes, no], intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([cat])
+    }
+
+    func handleNightRequest(id: Int, mode: String) {
+        guard mode == "ask", id > 0, id != lastNightRequestID else { return }
+        lastNightRequestID = id
+        ensureNightNotification { granted in
+            if granted {
+                self.postNightNotification()
+            } else {
+                self.showNightMenuFallback()
+            }
+        }
+    }
+
+    func ensureNightNotification(completion: @escaping (Bool) -> Void) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { ok, _ in
+                    DispatchQueue.main.async { completion(ok) }
+                }
+            case .authorized, .provisional, .ephemeral:
+                DispatchQueue.main.async { completion(true) }
+            default:
+                DispatchQueue.main.async { completion(false) }
+            }
+        }
+    }
+
+    func postNightNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "KeepGoing"
+        content.body = "Keep your Mac awake overnight? Agents are still running. No answer in 10 minutes means sleep."
+        content.categoryIdentifier = "keepgoing.night"
+        let req = UNNotificationRequest(identifier: "keepgoing-night", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req)
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        switch response.actionIdentifier {
+        case "keepgoing.night.yes":
+            postNightAnswer("yes")
+        case "keepgoing.night.no":
+            postNightAnswer("no")
+        default:
+            break
+        }
+        completionHandler()
+    }
+
+    func showNightMenuFallback() {
+        nightMenuFallback = true
+        item.button?.image = symbol("moon.zzz")
+        renderedIcon = "moon.zzz"
+        nightItem.isHidden = false
+        setTitle(nightItem, to: "Overnight: asking — choose below", store: &renderedNight)
+        nightYesItem.isHidden = false
+        nightNoItem.isHidden = false
+    }
+
+    func clearNightFallback() {
+        guard nightMenuFallback else { return }
+        nightMenuFallback = false
+        nightYesItem.isHidden = true
+        nightNoItem.isHidden = true
+        renderedIcon = ""
+        render()
+    }
+
+    func postNightAnswer(_ answer: String) {
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:7777/_night")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["answer": answer])
+        URLSession.shared.dataTask(with: req).resume()
+        clearNightFallback()
+    }
+
+    @objc func nightAnswerYes() { postNightAnswer("yes") }
+    @objc func nightAnswerNo() { postNightAnswer("no") }
 
     func postThermalNotification() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
