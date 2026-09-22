@@ -286,7 +286,6 @@ func cmdDaemon(c cfg, saved config.Config) int {
 			At:     st.NightAnswer.At,
 		}
 	}
-	var nightMode string
 	var nightAskSession string
 	var nightSleepLogged bool
 	batteryFloor := saved.BatteryFloorEffective(loaded)
@@ -415,7 +414,6 @@ func cmdDaemon(c cfg, saved config.Config) int {
 				m["night_request"] = req
 			}
 		}
-		m["night_mode"] = nightMode
 		if nightAns != nil {
 			m["night_answer"] = map[string]any{
 				"date":   nightAns.Date,
@@ -423,9 +421,14 @@ func cmdDaemon(c cfg, saved config.Config) int {
 				"at":     night.AnswerAt(nightAns.At),
 			}
 		}
-		if until := night.UntilAt(time.Now(), nightCfg); !until.IsZero() &&
-			(nightMode == night.ModeRun || nightMode == night.ModeSleep) {
-			m["night_until_at"] = until.Format(time.RFC3339)
+		mode, untilAt, askAtEff, untilClock := night.Status(time.Now(), nightCfg, nightAns)
+		m["night_mode"] = mode
+		if askAtEff != "" {
+			m["night_ask_at"] = askAtEff
+			m["night_until"] = untilClock
+		}
+		if !untilAt.IsZero() {
+			m["night_until_at"] = untilAt.Format(time.RFC3339)
 		}
 		m["battery_floor"] = batteryFloor
 		if pct, ok := power.BatteryPercent(); ok {
@@ -551,7 +554,6 @@ func cmdDaemon(c cfg, saved config.Config) int {
 
 		now := time.Now()
 		mode, reason := night.Decide(now, nightCfg, nightAns)
-		nightMode = mode
 		if mode == night.ModeSleep && len(ps) > 0 {
 			want = false
 			if !nightSleepLogged {
@@ -964,23 +966,26 @@ func cmdNight(args []string, saved config.Config, base string) int {
 	}
 	switch args[0] {
 	case "status":
+		loaded, _ := config.LoadDetailed()
+		askAt, until := saved.NightSettings(loaded)
 		if resp, err := http.Get(base + "/_status"); err == nil {
 			defer resp.Body.Close()
 			var m map[string]any
 			if json.NewDecoder(resp.Body).Decode(&m) == nil {
-				fmt.Printf("night_mode=%v", m["night_mode"])
-				if a, ok := m["night_answer"]; ok {
-					fmt.Printf(" night_answer=%v", a)
+				mode, _ := m["night_mode"].(string)
+				if mode == "" {
+					mode = night.ModeOff
 				}
-				if u, ok := m["night_until_at"]; ok {
-					fmt.Printf(" night_until_at=%v", u)
+				if v, ok := m["night_ask_at"].(string); ok && v != "" {
+					askAt = v
 				}
-				fmt.Println()
+				if v, ok := m["night_until"].(string); ok && v != "" {
+					until = v
+				}
+				fmt.Print(formatNightStatus(mode, askAt, until, m))
 				return 0
 			}
 		}
-		loaded, _ := config.LoadDetailed()
-		askAt, until := saved.NightSettings(loaded)
 		st, _ := config.LoadState()
 		var ans *night.Answer
 		if st.NightAnswer != nil {
@@ -988,12 +993,12 @@ func cmdNight(args []string, saved config.Config, base string) int {
 				Date: st.NightAnswer.Date, Answer: st.NightAnswer.Answer, At: st.NightAnswer.At,
 			}
 		}
-		mode, _ := night.Decide(time.Now(), night.Settings{AskAt: askAt, Until: until}, ans)
-		fmt.Printf("night_mode=%s ask_at=%s until=%s", mode, askAt, until)
-		if ans != nil {
-			fmt.Printf(" answer=%s date=%s", ans.Answer, ans.Date)
+		mode, untilAt, askEff, untilClock := night.Status(time.Now(), night.Settings{AskAt: askAt, Until: until}, ans)
+		m := map[string]any{"night_mode": mode}
+		if !untilAt.IsZero() {
+			m["night_until_at"] = untilAt.Format(time.RFC3339)
 		}
-		fmt.Println()
+		fmt.Print(formatNightStatus(mode, askEff, untilClock, m))
 		return 0
 	case "yes", "no":
 		if err := saveNightAnswer(args[0]); err != nil {
@@ -1037,6 +1042,34 @@ func cmdNight(args []string, saved config.Config, base string) int {
 	}
 	fmt.Fprintln(os.Stderr, "unknown night subcommand:", args[0])
 	return 2
+}
+
+func formatNightStatus(mode, askAt, until string, m map[string]any) string {
+	var b strings.Builder
+	switch {
+	case askAt == "":
+		fmt.Fprintf(&b, "overnight: off\nnight_mode=%s\n", night.ModeOff)
+	case mode == night.ModeRun:
+		fmt.Fprintf(&b, "overnight: on until %s\n", until)
+		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
+	case mode == night.ModeSleep:
+		fmt.Fprintf(&b, "overnight: off tonight\n")
+		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
+	case mode == night.ModeAsk:
+		fmt.Fprintf(&b, "overnight: asking\n")
+		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
+	default:
+		fmt.Fprintf(&b, "overnight: asks at %s\n", askAt)
+		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
+	}
+	if a, ok := m["night_answer"]; ok {
+		fmt.Fprintf(&b, " night_answer=%v", a)
+	}
+	if u, ok := m["night_until_at"]; ok {
+		fmt.Fprintf(&b, " night_until_at=%v", u)
+	}
+	b.WriteByte('\n')
+	return b.String()
 }
 
 func parseClockTime(s string) (hour, min int, err error) {

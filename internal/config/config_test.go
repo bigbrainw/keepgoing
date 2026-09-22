@@ -203,3 +203,21 @@ func TestRestoreMissingLidMode(t *testing.T) {
 		t.Fatalf("config not updated: %s", b)
 	}
 }
+
+func TestNightSettingsDefaultWhenAbsent(t *testing.T) {
+	_ = testConfigPath(t)
+	loaded, err := LoadDetailed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.HasNightAskAt {
+		t.Fatal("expected night_ask_at absent in empty config")
+	}
+	askAt, until := loaded.Config.NightSettings(loaded)
+	if askAt != "23:00" {
+		t.Fatalf("askAt = %q want 23:00", askAt)
+	}
+	if until != "07:00" {
+		t.Fatalf("until = %q want 07:00", until)
+	}
+}

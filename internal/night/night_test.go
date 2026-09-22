@@ -102,3 +102,38 @@ func TestUntilAt(t *testing.T) {
 		t.Fatalf("until_at = %v want %v", end, want)
 	}
 }
+
+func TestStatusDaytimeEnabled(t *testing.T) {
+	loc := mustLoc(t)
+	now := at(t, loc, 2026, 9, 22, 14, 30)
+	mode, untilAt, askAt, until := Status(now, cfg(), nil)
+	if mode != ModeOff {
+		t.Fatalf("daytime mode = %q want off", mode)
+	}
+	if askAt != "23:00" {
+		t.Fatalf("askAt = %q want 23:00", askAt)
+	}
+	if until != "07:00" {
+		t.Fatalf("until = %q want 07:00", until)
+	}
+	wantAsk := at(t, loc, 2026, 9, 22, 23, 0)
+	if !untilAt.Equal(wantAsk) {
+		t.Fatalf("untilAt = %v want %v", untilAt, wantAsk)
+	}
+}
+
+func TestStatusDefaultAskAtWhenAbsent(t *testing.T) {
+	loc := mustLoc(t)
+	// Settings with explicit defaults as NightSettings would produce.
+	s := Settings{AskAt: "23:00", Until: "07:00"}
+	mode, untilAt, askAt, _ := Status(at(t, loc, 2026, 9, 22, 10, 0), s, nil)
+	if askAt != "23:00" {
+		t.Fatalf("default askAt = %q want 23:00", askAt)
+	}
+	if mode != ModeOff {
+		t.Fatalf("mode = %q want off", mode)
+	}
+	if untilAt.IsZero() {
+		t.Fatal("expected night_until_at candidate")
+	}
+}

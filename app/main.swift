@@ -122,6 +122,7 @@ struct Status {
     var nightMode = ""
     var nightAnswer = ""
     var nightUntilAt = ""
+    var nightAskAt = ""
     var reachable = false
 }
 
@@ -278,6 +279,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
                     s.nightAnswer = na["answer"] as? String ?? ""
                 }
                 s.nightUntilAt = j["night_until_at"] as? String ?? ""
+                s.nightAskAt = j["night_ask_at"] as? String ?? ""
                 if let wr = j["wifi_request"] as? [String: Any] {
                     self.wifi.handleRequest(wr, cli: self.cli)
                 }
@@ -462,7 +464,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
         case "ask":
             return "Overnight: asking — choose below"
         case "off":
-            return "Overnight: off"
+            if s.nightAskAt.isEmpty {
+                return "Overnight: off"
+            }
+            return "Overnight: asks at \(s.nightAskAt)"
         default:
             return "Overnight: asks at 23:00"
         }

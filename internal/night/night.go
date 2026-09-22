@@ -165,3 +165,49 @@ func UntilAt(now time.Time, cfg Settings) time.Time {
 	}
 	return sessionEnd
 }
+
+// NextAskAt returns the next night_ask_at time (for daytime /_status).
+func NextAskAt(now time.Time, cfg Settings) time.Time {
+	if cfg.AskAt == "" {
+		return time.Time{}
+	}
+	askHour, askMin, err := parseClock(cfg.AskAt)
+	if err != nil {
+		return time.Time{}
+	}
+	today := dateOnly(now)
+	ask := combine(today, askHour, askMin)
+	if now.Before(ask) {
+		return ask
+	}
+	return combine(today.Add(24*time.Hour), askHour, askMin)
+}
+
+// Status returns daemon / CLI fields: mode is always run|sleep|ask|off.
+func Status(now time.Time, cfg Settings, answer *Answer) (mode string, untilAt time.Time, askAt, untilClock string) {
+	askAt = cfg.AskAt
+	untilClock = cfg.Until
+	if untilClock == "" {
+		untilClock = "07:00"
+	}
+	if askAt == "" {
+		return ModeOff, time.Time{}, "", untilClock
+	}
+	mode, _ = Decide(now, cfg, answer)
+	switch mode {
+	case ModeRun, ModeSleep:
+		untilAt = UntilAt(now, cfg)
+	case ModeAsk:
+		askHour, askMin, err := parseClock(cfg.AskAt)
+		untilHour, untilMin, err2 := parseClock(untilClock)
+		if err == nil && err2 == nil {
+			_, _, sessionStart, _ := nightSession(now, askHour, askMin, untilHour, untilMin)
+			if !sessionStart.IsZero() {
+				untilAt = sessionStart.Add(AskTimeout)
+			}
+		}
+	default:
+		untilAt = NextAskAt(now, cfg)
+	}
+	return mode, untilAt, askAt, untilClock
+}
