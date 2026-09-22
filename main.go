@@ -283,6 +283,9 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	var nightMode string
 	var nightAskSession string
 	var nightSleepLogged bool
+	batteryFloor := saved.BatteryFloorEffective(loaded)
+	var batteryGuard bool
+	var batteryNotified bool
 	ctx, cancel := signalCtx()
 	defer cancel()
 	co, err := startCore(ctx, c)
@@ -417,6 +420,10 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		if until := night.UntilAt(time.Now(), nightCfg); !until.IsZero() &&
 			(nightMode == night.ModeRun || nightMode == night.ModeSleep) {
 			m["night_until_at"] = until.Format(time.RFC3339)
+		}
+		m["battery_floor"] = batteryFloor
+		if pct, ok := power.BatteryPercent(); ok {
+			m["battery_pct"] = pct
 		}
 		if _, _, cpuC := co.px.ThermalSnapshot(); cpuC != nil {
 			m["cpu_c"] = *cpuC
@@ -562,6 +569,36 @@ func cmdDaemon(c cfg, saved config.Config) int {
 				log.Printf("[night] asking whether to run overnight")
 				co.px.NightBridge.BeginAsk()
 				nightAskSession = sessionDate
+			}
+		}
+		pct, hasPct := power.BatteryPercent()
+		onBatt := power.OnBattery()
+		if batteryFloor > 0 && hasPct && onBatt && pct <= batteryFloor {
+			want = false
+			if !batteryGuard {
+				log.Printf("[battery] %d%% ≤ floor, allowing sleep", pct)
+				if !batteryNotified {
+					smcread.NotifyUser(fmt.Sprintf("Battery at %d%% — allowing sleep", pct))
+					batteryNotified = true
+				}
+				batteryGuard = true
+			}
+			if holder != nil || (lidOK && lid.SleepDisabled()) || lid.LowPowerMode() {
+				setLowPower(false)
+			}
+		} else if batteryGuard {
+			rearm := !onBatt
+			if hasPct && pct > batteryFloor+5 {
+				rearm = true
+			}
+			if rearm {
+				batteryGuard = false
+				batteryNotified = false
+				if hasPct {
+					log.Printf("[battery] re-armed at %d%%", pct)
+				} else {
+					log.Printf("[battery] re-armed on AC power")
+				}
 			}
 		}
 		switch {
