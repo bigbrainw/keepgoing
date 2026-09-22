@@ -121,6 +121,7 @@ struct Status {
     var cpuC: Double?
     var nightMode = ""
     var nightAnswer = ""
+    var nightUntilAt = ""
     var reachable = false
 }
 
@@ -142,6 +143,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
     var renderedHotspot = ""
     var renderedThermal = ""
     var renderedNight = ""
+    var renderedOvernight = false
     var renderedAlways = false
     var renderedScreenOff = false
     var renderedIdleSleep = false
@@ -164,6 +166,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
     let nightItem = NSMenuItem()
     let nightYesItem = NSMenuItem(title: "Keep running overnight", action: #selector(nightAnswerYes), keyEquivalent: "")
     let nightNoItem = NSMenuItem(title: "Let it sleep tonight", action: #selector(nightAnswerNo), keyEquivalent: "")
+    let overnightItem = NSMenuItem(title: "Run overnight tonight", action: #selector(toggleOvernight), keyEquivalent: "")
     let lidToggleItem = NSMenuItem(title: "Keep awake with lid closed", action: #selector(toggleLid), keyEquivalent: "")
     let alwaysItem = NSMenuItem(title: "Always keep awake", action: #selector(toggleAlways), keyEquivalent: "")
     let screenOffItem = NSMenuItem(title: "Turn off screen when idle", action: #selector(toggleScreenOff), keyEquivalent: "")
@@ -213,10 +216,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
         screenOffItem.target = self
         idleSleepItem.target = self
         hotspotActionItem.target = self
+        overnightItem.target = self
         menu.addItem(lidToggleItem)
         menu.addItem(alwaysItem)
         menu.addItem(screenOffItem)
         menu.addItem(idleSleepItem)
+        menu.addItem(overnightItem)
         menu.addItem(hotspotActionItem)
         menu.addItem(nightYesItem)
         menu.addItem(nightNoItem)
@@ -272,6 +277,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
                 if let na = j["night_answer"] as? [String: Any] {
                     s.nightAnswer = na["answer"] as? String ?? ""
                 }
+                s.nightUntilAt = j["night_until_at"] as? String ?? ""
                 if let wr = j["wifi_request"] as? [String: Any] {
                     self.wifi.handleRequest(wr, cli: self.cli)
                 }
@@ -327,6 +333,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
             setCheck(alwaysItem, s.always, store: &renderedAlways)
             setCheck(screenOffItem, s.screenOffAfter > 0, store: &renderedScreenOff)
             setCheck(idleSleepItem, s.idleSleepAfter > 0, store: &renderedIdleSleep)
+            setCheck(overnightItem, s.nightAnswer == "yes", store: &renderedOvernight)
         } else {
             setTitle(versionItem, to: "Daemon not running", store: &renderedVersion)
             for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem] { it.isHidden = true }
@@ -441,12 +448,37 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
     }
 
     func nightStatusLine(_ s: Status) -> String {
-        switch s.nightMode {
-        case "run": return "Overnight: on until morning"
-        case "sleep": return "Overnight: off tonight"
-        case "ask": return "Overnight: asks at 23:00"
-        default: return "Overnight: asks at 23:00"
+        if nightMenuFallback && s.nightMode == "ask" {
+            return "Overnight: asking — choose below"
         }
+        switch s.nightMode {
+        case "run":
+            if let t = formatUntilClock(s.nightUntilAt) {
+                return "Overnight: on until \(t)"
+            }
+            return "Overnight: on until morning"
+        case "sleep":
+            return "Overnight: off tonight"
+        case "ask":
+            return "Overnight: asking — choose below"
+        case "off":
+            return "Overnight: off"
+        default:
+            return "Overnight: asks at 23:00"
+        }
+    }
+
+    func formatUntilClock(_ iso: String) -> String? {
+        guard !iso.isEmpty else { return nil }
+        let f = ISO8601DateFormatter()
+        guard let d = f.date(from: iso) else { return nil }
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: d)
+        let m = cal.component(.minute, from: d)
+        if m == 0 {
+            return String(format: "%d:00", h)
+        }
+        return String(format: "%d:%02d", h, m)
     }
 
     func registerNightCategory() {
@@ -534,6 +566,12 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
 
     @objc func nightAnswerYes() { postNightAnswer("yes") }
     @objc func nightAnswerNo() { postNightAnswer("no") }
+
+    @objc func toggleOvernight() {
+        let on = status.nightAnswer != "yes"
+        run([cli, "night", on ? "yes" : "no"])
+        restartDaemon()
+    }
 
     func postThermalNotification() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in

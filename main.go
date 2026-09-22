@@ -139,6 +139,10 @@ func main() {
 		os.Exit(cmdHooks(fs.Args()))
 	case "screen":
 		os.Exit(cmdScreen(fs.Args(), saved))
+	case "night":
+		os.Exit(cmdNight(fs.Args(), saved, base))
+	case "battery":
+		os.Exit(cmdBattery(fs.Args(), saved))
 	case "app":
 		os.Exit(cmdApp(fs.Args()))
 	case "run":
@@ -184,6 +188,8 @@ func usage() {
   keepgoing thermal [--csv]      last 20 lid/thermal/CPU samples (or CSV path)
   keepgoing hooks install|uninstall|status   opt-in Claude/Codex working-idle hooks
   keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
+  keepgoing night status|yes|no|ask-at HH:MM|off   overnight prompt and sleep default
+  keepgoing battery floor <pct|0>                 release sleep inhibit below this level on battery
   keepgoing app login on|off|status   menu bar app at login (launchd KeepAlive)
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
@@ -926,6 +932,155 @@ func cmdScreen(args []string, saved config.Config) int {
 	}
 	fmt.Fprintln(os.Stderr, "unknown screen subcommand:", args[0])
 	return 2
+}
+
+// ---- night -----------------------------------------------------------------
+
+func saveNightAnswer(answer string) error {
+	loaded, _ := config.LoadDetailed()
+	askAt, untilStr := loaded.Config.NightSettings(loaded)
+	nightCfg := night.Settings{AskAt: askAt, Until: untilStr}
+	sessionDate := night.SessionDate(time.Now(), nightCfg)
+	if sessionDate == "" {
+		sessionDate = time.Now().Format("2006-01-02")
+	}
+	return config.SaveNightAnswer(config.NightAnswer{
+		Date: sessionDate, Answer: answer, At: time.Now().Unix(),
+	})
+}
+
+func postNightHTTP(base, answer string) {
+	body, _ := json.Marshal(map[string]string{"answer": answer})
+	resp, err := http.Post(base+"/_night", "application/json", bytes.NewReader(body))
+	if err == nil {
+		resp.Body.Close()
+	}
+}
+
+func cmdNight(args []string, saved config.Config, base string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing night status|yes|no|ask-at HH:MM|off")
+		return 2
+	}
+	switch args[0] {
+	case "status":
+		if resp, err := http.Get(base + "/_status"); err == nil {
+			defer resp.Body.Close()
+			var m map[string]any
+			if json.NewDecoder(resp.Body).Decode(&m) == nil {
+				fmt.Printf("night_mode=%v", m["night_mode"])
+				if a, ok := m["night_answer"]; ok {
+					fmt.Printf(" night_answer=%v", a)
+				}
+				if u, ok := m["night_until_at"]; ok {
+					fmt.Printf(" night_until_at=%v", u)
+				}
+				fmt.Println()
+				return 0
+			}
+		}
+		loaded, _ := config.LoadDetailed()
+		askAt, until := saved.NightSettings(loaded)
+		st, _ := config.LoadState()
+		var ans *night.Answer
+		if st.NightAnswer != nil {
+			ans = &night.Answer{
+				Date: st.NightAnswer.Date, Answer: st.NightAnswer.Answer, At: st.NightAnswer.At,
+			}
+		}
+		mode, _ := night.Decide(time.Now(), night.Settings{AskAt: askAt, Until: until}, ans)
+		fmt.Printf("night_mode=%s ask_at=%s until=%s", mode, askAt, until)
+		if ans != nil {
+			fmt.Printf(" answer=%s date=%s", ans.Answer, ans.Date)
+		}
+		fmt.Println()
+		return 0
+	case "yes", "no":
+		if err := saveNightAnswer(args[0]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		postNightHTTP(base, args[0])
+		kickDaemon()
+		fmt.Printf("overnight tonight: %s\n", args[0])
+		return 0
+	case "ask-at":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: keepgoing night ask-at HH:MM")
+			return 2
+		}
+		if _, _, err := parseClockTime(args[1]); err != nil {
+			fmt.Fprintln(os.Stderr, "time must be HH:MM")
+			return 2
+		}
+		if err := config.Update(func(c *config.Config) error {
+			c.NightAskAt = args[1]
+			return nil
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		fmt.Printf("overnight ask at %s\n", args[1])
+		return 0
+	case "off":
+		if err := config.Update(func(c *config.Config) error {
+			c.NightAskAt = ""
+			return nil
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		fmt.Println("overnight prompt off")
+		return 0
+	}
+	fmt.Fprintln(os.Stderr, "unknown night subcommand:", args[0])
+	return 2
+}
+
+func parseClockTime(s string) (hour, min int, err error) {
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("bad time")
+	}
+	hour, err = strconv.Atoi(parts[0])
+	if err != nil || hour < 0 || hour > 23 {
+		return 0, 0, fmt.Errorf("bad hour")
+	}
+	min, err = strconv.Atoi(parts[1])
+	if err != nil || min < 0 || min > 59 {
+		return 0, 0, fmt.Errorf("bad minute")
+	}
+	return hour, min, nil
+}
+
+// ---- battery ---------------------------------------------------------------
+
+func cmdBattery(args []string, saved config.Config) int {
+	if len(args) < 2 || args[0] != "floor" {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing battery floor <pct|0>")
+		return 2
+	}
+	n, err := strconv.Atoi(args[1])
+	if err != nil || n < 0 || n > 100 {
+		fmt.Fprintln(os.Stderr, "floor must be 0–100 (0 = off)")
+		return 2
+	}
+	if err := config.Update(func(c *config.Config) error {
+		c.BatteryFloor = n
+		return nil
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	kickDaemon()
+	if n == 0 {
+		fmt.Println("battery floor off")
+	} else {
+		fmt.Printf("battery floor %d%%\n", n)
+	}
+	return 0
 }
 
 // ---- hotspot ---------------------------------------------------------------
