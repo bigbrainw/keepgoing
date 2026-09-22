@@ -21,12 +21,30 @@ type Config struct {
 	CmuxStatus     *bool  `json:"cmux_status,omitempty"`      // poll cmux for working/idle; default true when cmux exists
 	ScreenOffAfter int    `json:"screen_off_after,omitempty"` // seconds idle before display off; 0 = disabled
 	IdleSleepAfter int    `json:"idle_sleep_after,omitempty"` // minutes all-idle before sleep allowed; 0 = off
+	NightAskAt     string `json:"night_ask_at,omitempty"`     // "23:00"; empty = off; omitted = default 23:00
+	NightUntil     string `json:"night_until,omitempty"`      // "07:00"
+	BatteryFloor   int    `json:"battery_floor,omitempty"`    // percent; 0 = off; default 25 when omitted
 }
 
 // Loaded is a config read from disk plus which keys were present in JSON.
 type Loaded struct {
-	Config     Config
-	HasLidMode bool
+	Config       Config
+	HasLidMode   bool
+	HasNightAskAt bool
+	HasBatteryFloor bool
+}
+
+// NightAnswer is the user's overnight choice stored in state.json.
+type NightAnswer struct {
+	Date   string `json:"date"`
+	Answer string `json:"answer"` // yes | no
+	At     int64  `json:"at"`
+}
+
+// State is runtime state persisted beside config.
+type State struct {
+	LidMode     bool         `json:"lid_mode"`
+	NightAnswer *NightAnswer `json:"night_answer,omitempty"`
 }
 
 // CmuxOn reports whether cmux status polling is enabled (default true when cmux exists).
@@ -66,7 +84,12 @@ func LoadDetailed() (Loaded, error) {
 	if err != nil {
 		return Loaded{}, err
 	}
-	return Loaded{Config: doc.cfg, HasLidMode: doc.has("lid_mode")}, nil
+	return Loaded{
+		Config:          doc.cfg,
+		HasLidMode:      doc.has("lid_mode"),
+		HasNightAskAt:   doc.has("night_ask_at"),
+		HasBatteryFloor: doc.has("battery_floor"),
+	}, nil
 }
 
 type document struct {
@@ -84,6 +107,7 @@ func knownKeys() []string {
 	return []string{
 		"hotspot_ssid", "listen", "connect", "always_awake", "lid_mode",
 		"cmux_status", "screen_off_after", "idle_sleep_after",
+		"night_ask_at", "night_until", "battery_floor",
 	}
 }
 
@@ -145,6 +169,9 @@ var salvagePatterns = []struct {
 	{"always_awake", regexp.MustCompile(`"always_awake"\s*:\s*(true|false)`)},
 	{"screen_off_after", regexp.MustCompile(`"screen_off_after"\s*:\s*(-?\d+)`)},
 	{"idle_sleep_after", regexp.MustCompile(`"idle_sleep_after"\s*:\s*(-?\d+)`)},
+	{"night_ask_at", regexp.MustCompile(`"night_ask_at"\s*:\s*"(?:([^"\\]*(?:\\.[^"\\]*)*)|([^"]*))`)},
+	{"night_until", regexp.MustCompile(`"night_until"\s*:\s*"(?:([^"\\]*(?:\\.[^"\\]*)*)|([^"]*))`)},
+	{"battery_floor", regexp.MustCompile(`"battery_floor"\s*:\s*(-?\d+)`)},
 	{"listen", regexp.MustCompile(`"listen"\s*:\s*"(?:([^"\\]*(?:\\.[^"\\]*)*)|([^"]*))`)},
 	{"connect", regexp.MustCompile(`"connect"\s*:\s*"(?:([^"\\]*(?:\\.[^"\\]*)*)|([^"]*))`)},
 }
@@ -159,8 +186,14 @@ func salvageObject(s string) map[string]json.RawMessage {
 		switch p.key {
 		case "lid_mode", "always_awake":
 			out[p.key] = json.RawMessage(m[1])
-		case "screen_off_after", "idle_sleep_after":
+		case "screen_off_after", "idle_sleep_after", "battery_floor":
 			out[p.key] = json.RawMessage(m[1])
+		case "night_ask_at", "night_until":
+			val := m[1]
+			if val == "" && len(m) > 2 {
+				val = m[2]
+			}
+			out[p.key] = json.RawMessage(`"` + strings.ReplaceAll(val, `"`, `\"`) + `"`)
 		default:
 			val := m[1]
 			if val == "" && len(m) > 2 {
@@ -280,13 +313,52 @@ func mapKeys(m map[string]json.RawMessage) string {
 	return strings.Join(ks, ", ")
 }
 
-// SaveState records the last known daemon lid mode for recovery.
-func SaveState(lidMode bool) error {
+// NightSettings returns overnight config with defaults applied.
+func (c Config) NightSettings(loaded Loaded) (askAt, until string) {
+	if loaded.HasNightAskAt {
+		askAt = c.NightAskAt
+	} else {
+		askAt = "23:00"
+	}
+	until = c.NightUntil
+	if until == "" {
+		until = "07:00"
+	}
+	return askAt, until
+}
+
+// BatteryFloorEffective returns the battery floor percent (0 = off).
+func (c Config) BatteryFloorEffective(loaded Loaded) int {
+	if loaded.HasBatteryFloor {
+		return c.BatteryFloor
+	}
+	return 25
+}
+
+// LoadState reads state.json.
+func LoadState() (State, error) {
+	p := statePath()
+	b, err := os.ReadFile(p)
+	if os.IsNotExist(err) {
+		return State{}, nil
+	}
+	if err != nil {
+		return State{}, err
+	}
+	var st State
+	if err := json.Unmarshal(b, &st); err != nil {
+		return State{}, err
+	}
+	return st, nil
+}
+
+// SaveState records daemon runtime state for recovery.
+func SaveState(st State) error {
 	p := statePath()
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(map[string]bool{"lid_mode": lidMode}, "", "  ")
+	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -312,15 +384,30 @@ func SaveState(lidMode bool) error {
 	return os.Rename(tmpName, p)
 }
 
+// SaveLidMode updates lid_mode in state.json, preserving night_answer.
+func SaveLidMode(lidMode bool) error {
+	st, err := LoadState()
+	if err != nil {
+		st = State{}
+	}
+	st.LidMode = lidMode
+	return SaveState(st)
+}
+
+// SaveNightAnswer stores the overnight answer in state.json.
+func SaveNightAnswer(ans NightAnswer) error {
+	st, err := LoadState()
+	if err != nil {
+		st = State{}
+	}
+	st.NightAnswer = &ans
+	return SaveState(st)
+}
+
 // PreviousLidMode returns the last known lid mode from state.json or daemon.log.
 func PreviousLidMode() *bool {
-	if b, err := os.ReadFile(statePath()); err == nil {
-		var m map[string]bool
-		if json.Unmarshal(b, &m) == nil {
-			if v, ok := m["lid_mode"]; ok {
-				return &v
-			}
-		}
+	if st, err := LoadState(); err == nil {
+		return &st.LidMode
 	}
 	if v := lidModeFromDaemonLog(); v != nil {
 		return v
