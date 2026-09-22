@@ -20,6 +20,7 @@ import (
 
 	"github.com/elijah/keepgoing/internal/agentsignal"
 	"github.com/elijah/keepgoing/internal/netwatch"
+	"github.com/elijah/keepgoing/internal/night"
 	"github.com/elijah/keepgoing/internal/wifi"
 )
 
@@ -67,6 +68,7 @@ type Server struct {
 
 	AgentSignals *agentsignal.Store
 	WiFiBridge   *wifi.AppBridge
+	NightBridge  *night.Bridge
 }
 
 // New builds a Server. holdMax bounds how long a request may be parked.
@@ -104,6 +106,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/_wifi", s.wifi)
 	mux.HandleFunc("/_wifi/request", s.wifiRequest)
 	mux.HandleFunc("/_wifi/result", s.wifiResult)
+	mux.HandleFunc("/_night", s.night)
 	mux.HandleFunc("/_force", s.force) // debug: /_force?offline=1|0|clear
 	mux.HandleFunc("/", s.serve)
 	return mux
@@ -196,6 +199,14 @@ func (s *Server) wifiResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.WiFiBridge.HandleResultGET(w, r)
+}
+
+func (s *Server) night(w http.ResponseWriter, r *http.Request) {
+	if s.NightBridge == nil {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	s.NightBridge.HandlePOST(w, r)
 }
 
 func (s *Server) agent(w http.ResponseWriter, r *http.Request) {

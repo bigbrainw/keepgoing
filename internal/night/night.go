@@ -118,6 +118,30 @@ func nightSession(now time.Time, askHour, askMin, untilHour, untilMin int) (sess
 	return "", false, time.Time{}, time.Time{}
 }
 
+// SessionDate returns the overnight session date key for now, or "" if outside the window.
+func SessionDate(now time.Time, cfg Settings) string {
+	if cfg.AskAt == "" {
+		return ""
+	}
+	askHour, askMin, err := parseClock(cfg.AskAt)
+	if err != nil {
+		return ""
+	}
+	untilStr := cfg.Until
+	if untilStr == "" {
+		untilStr = "07:00"
+	}
+	untilHour, untilMin, err := parseClock(untilStr)
+	if err != nil {
+		return ""
+	}
+	sessionDate, inSession, _, _ := nightSession(now, askHour, askMin, untilHour, untilMin)
+	if !inSession {
+		return ""
+	}
+	return sessionDate
+}
+
 // UntilAt returns when the current overnight run/sleep period ends (for /_status).
 func UntilAt(now time.Time, cfg Settings) time.Time {
 	if cfg.AskAt == "" {

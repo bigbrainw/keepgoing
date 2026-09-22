@@ -406,8 +406,11 @@ func SaveNightAnswer(ans NightAnswer) error {
 
 // PreviousLidMode returns the last known lid mode from state.json or daemon.log.
 func PreviousLidMode() *bool {
-	if st, err := LoadState(); err == nil {
-		return &st.LidMode
+	if _, err := os.Stat(statePath()); err == nil {
+		if st, err := LoadState(); err == nil {
+			v := st.LidMode
+			return &v
+		}
 	}
 	if v := lidModeFromDaemonLog(); v != nil {
 		return v

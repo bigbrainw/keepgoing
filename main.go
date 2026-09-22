@@ -38,6 +38,7 @@ import (
 	"github.com/elijah/keepgoing/internal/hooks"
 	"github.com/elijah/keepgoing/internal/lid"
 	"github.com/elijah/keepgoing/internal/netwatch"
+	"github.com/elijah/keepgoing/internal/night"
 	"github.com/elijah/keepgoing/internal/power"
 	"github.com/elijah/keepgoing/internal/procwatch"
 	"github.com/elijah/keepgoing/internal/proxy"
@@ -209,9 +210,11 @@ func startCore(ctx context.Context, c cfg) (*core, error) {
 
 	signals := agentsignal.New()
 	bridge := wifi.NewAppBridge()
+	nightBridge := night.NewBridge()
 	px := proxy.New(proxy.DefaultRoutes, nw, c.holdMax)
 	px.AgentSignals = signals
 	px.WiFiBridge = bridge
+	px.NightBridge = nightBridge
 	ln, err := net.Listen("tcp", c.listen)
 	if err != nil {
 		return nil, fmt.Errorf("listen %s: %w (already running? `keepgoing status`)", c.listen, err)
@@ -257,13 +260,29 @@ func signalCtx() (context.Context, context.CancelFunc) {
 // ---- daemon ----------------------------------------------------------------
 
 func cmdDaemon(c cfg, saved config.Config) int {
-	if loaded, err := config.LoadDetailed(); err == nil {
-		if restored, ok := config.RestoreMissingLidMode(loaded); ok {
+	var loaded config.Loaded
+	if l, err := config.LoadDetailed(); err == nil {
+		loaded = l
+		if restored, ok := config.RestoreMissingLidMode(l); ok {
 			saved = restored
-		} else if !loaded.HasLidMode {
-			saved = loaded.Config
+		} else if !l.HasLidMode {
+			saved = l.Config
 		}
 	}
+	askAt, untilStr := saved.NightSettings(loaded)
+	nightCfg := night.Settings{AskAt: askAt, Until: untilStr}
+	st, _ := config.LoadState()
+	var nightAns *night.Answer
+	if st.NightAnswer != nil {
+		nightAns = &night.Answer{
+			Date:   st.NightAnswer.Date,
+			Answer: st.NightAnswer.Answer,
+			At:     st.NightAnswer.At,
+		}
+	}
+	var nightMode string
+	var nightAskSession string
+	var nightSleepLogged bool
 	ctx, cancel := signalCtx()
 	defer cancel()
 	co, err := startCore(ctx, c)
@@ -382,6 +401,23 @@ func cmdDaemon(c cfg, saved config.Config) int {
 				m["wifi_request"] = req
 			}
 		}
+		if co.px.NightBridge != nil {
+			if req := co.px.NightBridge.StatusRequestField(); req != nil {
+				m["night_request"] = req
+			}
+		}
+		m["night_mode"] = nightMode
+		if nightAns != nil {
+			m["night_answer"] = map[string]any{
+				"date":   nightAns.Date,
+				"answer": nightAns.Answer,
+				"at":     night.AnswerAt(nightAns.At),
+			}
+		}
+		if until := night.UntilAt(time.Now(), nightCfg); !until.IsZero() &&
+			(nightMode == night.ModeRun || nightMode == night.ModeSleep) {
+			m["night_until_at"] = until.Format(time.RFC3339)
+		}
 		if _, _, cpuC := co.px.ThermalSnapshot(); cpuC != nil {
 			m["cpu_c"] = *cpuC
 		}
@@ -416,6 +452,15 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		}
 		setLid(false)
 	}
+	nightRelease := func(msg string) {
+		if holder != nil || lidOK && lid.SleepDisabled() || lid.LowPowerMode() {
+			setLowPower(false)
+			release()
+			if msg != "" {
+				log.Printf("[night] %s", msg)
+			}
+		}
+	}
 	defer func() {
 		coolMgr.Shutdown(setLowPower)
 		release()
@@ -435,10 +480,30 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	readSMC()
 	lastSMC = time.Now()
 
+	co.px.NightBridge.SetOnAnswer(func(ans string) error {
+		sessionDate := night.SessionDate(time.Now(), nightCfg)
+		if sessionDate == "" {
+			sessionDate = time.Now().Format("2006-01-02")
+		}
+		na := config.NightAnswer{Date: sessionDate, Answer: ans, At: time.Now().Unix()}
+		if err := config.SaveNightAnswer(na); err != nil {
+			return err
+		}
+		nightAns = &night.Answer{Date: na.Date, Answer: na.Answer, At: na.At}
+		log.Printf("[night] answer %s for %s", ans, sessionDate)
+		if ans == "no" {
+			nightRelease(fmt.Sprintf("allowing sleep until %s", untilStr))
+			nightSleepLogged = true
+		} else {
+			nightSleepLogged = false
+		}
+		return nil
+	})
+
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	log.Printf("[daemon] up: always=%v idle-grace=%s lid=%v", c.always, c.idleGrace, lidOK)
-	if err := config.SaveState(saved.LidMode); err != nil {
+	if err := config.SaveLidMode(saved.LidMode); err != nil {
 		log.Printf("[config] state: %v", err)
 	}
 	prev := ""
@@ -470,6 +535,35 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		idleSleepRelease := idleSleep && !allIdleSince.IsZero() &&
 			time.Since(allIdleSince) >= time.Duration(saved.IdleSleepAfter)*time.Minute
 		want := !c.noAwake && (c.always || (len(ps) > 0 && !idleSleepRelease && (!lastSeen.IsZero() && time.Since(lastSeen) < c.idleGrace)))
+
+		now := time.Now()
+		mode, reason := night.Decide(now, nightCfg, nightAns)
+		nightMode = mode
+		if mode == night.ModeSleep && len(ps) > 0 {
+			want = false
+			if !nightSleepLogged {
+				if strings.Contains(reason, "no answer") {
+					log.Printf("[night] no answer, allowing sleep until %s", untilStr)
+				} else {
+					log.Printf("[night] %s", reason)
+				}
+				nightSleepLogged = true
+				co.px.NightBridge.ClearAsk()
+			}
+			if holder != nil || (lidOK && lid.SleepDisabled()) || lid.LowPowerMode() {
+				setLowPower(false)
+			}
+		} else if mode != night.ModeSleep {
+			nightSleepLogged = false
+		}
+		if mode == night.ModeAsk && len(ps) > 0 {
+			sessionDate := night.SessionDate(now, nightCfg)
+			if sessionDate != "" && nightAskSession != sessionDate {
+				log.Printf("[night] asking whether to run overnight")
+				co.px.NightBridge.BeginAsk()
+				nightAskSession = sessionDate
+			}
+		}
 		switch {
 		case want && holder == nil:
 			holder = awake.Hold()
