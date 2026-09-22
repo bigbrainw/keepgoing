@@ -1046,29 +1046,18 @@ func cmdNight(args []string, saved config.Config, base string) int {
 
 func formatNightStatus(mode, askAt, until string, m map[string]any) string {
 	var b strings.Builder
-	switch {
-	case askAt == "":
-		fmt.Fprintf(&b, "overnight: off\nnight_mode=%s\n", night.ModeOff)
-	case mode == night.ModeRun:
-		fmt.Fprintf(&b, "overnight: on until %s\n", until)
+	if askAt == "" {
+		fmt.Fprintf(&b, "night_mode=%s\n", night.ModeOff)
+	} else {
 		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
-	case mode == night.ModeSleep:
-		fmt.Fprintf(&b, "overnight: off tonight\n")
-		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
-	case mode == night.ModeAsk:
-		fmt.Fprintf(&b, "overnight: asking\n")
-		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
-	default:
-		fmt.Fprintf(&b, "overnight: asks at %s\n", askAt)
-		fmt.Fprintf(&b, "night_mode=%s ask_at=%s until=%s", mode, askAt, until)
+		if a, ok := m["night_answer"]; ok {
+			fmt.Fprintf(&b, " night_answer=%v", a)
+		}
+		if u, ok := m["night_until_at"]; ok {
+			fmt.Fprintf(&b, " night_until_at=%v", u)
+		}
+		b.WriteByte('\n')
 	}
-	if a, ok := m["night_answer"]; ok {
-		fmt.Fprintf(&b, " night_answer=%v", a)
-	}
-	if u, ok := m["night_until_at"]; ok {
-		fmt.Fprintf(&b, " night_until_at=%v", u)
-	}
-	b.WriteByte('\n')
 	return b.String()
 }
 

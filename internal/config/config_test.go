@@ -221,3 +221,24 @@ func TestNightSettingsDefaultWhenAbsent(t *testing.T) {
 		t.Fatalf("until = %q want 07:00", until)
 	}
 }
+
+func TestNightSettingsDefaultWhenKeyMissingFromConfig(t *testing.T) {
+	p := testConfigPath(t)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(`{"lid_mode":true,"hotspot_ssid":"x"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadDetailed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.HasNightAskAt {
+		t.Fatal("night_ask_at should be absent when not in JSON")
+	}
+	askAt, until := loaded.Config.NightSettings(loaded)
+	if askAt != "23:00" || until != "07:00" {
+		t.Fatalf("got ask_at=%q until=%q want 23:00 / 07:00", askAt, until)
+	}
+}
