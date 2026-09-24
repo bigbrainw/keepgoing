@@ -292,7 +292,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
                 }
                 s.primeNextAt = j["prime_next_at"] as? String ?? ""
                 if let pl = j["prime_last"] as? [String: Any] {
-                    s.primeLastOK = latestPrimeTime(pl)
+                    s.primeLastOK = self.latestPrimeTime(pl)
                 }
                 if let wr = j["wifi_request"] as? [String: Any] {
                     self.wifi.handleRequest(wr, cli: self.cli)
