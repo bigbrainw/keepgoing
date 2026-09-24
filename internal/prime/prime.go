@@ -17,14 +17,19 @@ type Settings struct {
 	ModelCodex string // optional codex -m; empty uses codex default
 }
 
-// Due returns agent names that should run now — at most once per scheduled time
-// per day, with a 30-minute catch-up window after each scheduled time.
-func Due(now time.Time, cfg Settings, lastRun map[string]time.Time) []string {
+// Item is one agent due at one scheduled slot.
+type Item struct {
+	Agent string
+	Slot  string
+}
+
+// Items returns agents due now with their scheduled slot.
+func Items(now time.Time, cfg Settings, lastRun map[string]time.Time) []Item {
 	if len(cfg.At) == 0 || len(cfg.Agents) == 0 {
 		return nil
 	}
 	today := dateOnly(now)
-	var due []string
+	var due []Item
 	seen := map[string]bool{}
 	for _, slot := range cfg.At {
 		slotTime, err := slotOnDay(today, slot)
@@ -46,10 +51,21 @@ func Due(now time.Time, cfg Settings, lastRun map[string]time.Time) []string {
 				continue
 			}
 			seen[agent] = true
-			due = append(due, agent)
+			due = append(due, Item{Agent: agent, Slot: slot})
 		}
 	}
 	return due
+}
+
+// Due returns agent names that should run now — at most once per scheduled time
+// per day, with a 30-minute catch-up window after each scheduled time.
+func Due(now time.Time, cfg Settings, lastRun map[string]time.Time) []string {
+	items := Items(now, cfg, lastRun)
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.Agent
+	}
+	return out
 }
 
 // NextAt returns the next scheduled primer time after now.
@@ -163,6 +179,20 @@ func parseClock(s string) (hour, min int, err error) {
 func dateOnly(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+// SettingsFromConfig builds primer settings from on-disk config.
+func SettingsFromConfig(c interface {
+	PrimeSettings() (at, agents []string, message, model, modelCodex string)
+}) Settings {
+	at, agents, message, model, modelCodex := c.PrimeSettings()
+	return Settings{
+		At:         at,
+		Agents:     agents,
+		Message:    message,
+		Model:      model,
+		ModelCodex: modelCodex,
+	}
 }
 
 // LastRunFromPrimeLast builds the Due() lastRun map from persisted state.

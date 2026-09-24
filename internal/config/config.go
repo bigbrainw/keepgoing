@@ -24,6 +24,11 @@ type Config struct {
 	NightAskAt     string `json:"night_ask_at,omitempty"`     // "23:00"; empty = off; omitted = default 23:00
 	NightUntil     string `json:"night_until,omitempty"`      // "07:00"
 	BatteryFloor   int    `json:"battery_floor,omitempty"`    // percent; 0 = off; default 25 when omitted
+	PrimeAt        []string `json:"prime_at,omitempty"`         // "07:00", "12:00"; empty = off
+	PrimeAgents    []string `json:"prime_agents,omitempty"`     // claude, codex
+	PrimeMessage   string `json:"prime_message,omitempty"`    // default hi
+	PrimeModel     string `json:"prime_model,omitempty"`      // claude model; default claude-haiku-4-5
+	PrimeModelCodex string `json:"prime_model_codex,omitempty"` // optional codex -m
 }
 
 // Loaded is a config read from disk plus which keys were present in JSON.
@@ -41,10 +46,18 @@ type NightAnswer struct {
 	At     int64  `json:"at"`
 }
 
+// PrimeLastEntry is the most recent primer run for one agent.
+type PrimeLastEntry struct {
+	TS   int64  `json:"ts"`
+	OK   bool   `json:"ok"`
+	Slot string `json:"slot,omitempty"`
+}
+
 // State is runtime state persisted beside config.
 type State struct {
-	LidMode     bool         `json:"lid_mode"`
-	NightAnswer *NightAnswer `json:"night_answer,omitempty"`
+	LidMode   bool                       `json:"lid_mode"`
+	NightAnswer *NightAnswer             `json:"night_answer,omitempty"`
+	PrimeLast map[string]PrimeLastEntry  `json:"prime_last,omitempty"`
 }
 
 // CmuxOn reports whether cmux status polling is enabled (default true when cmux exists).
@@ -108,6 +121,7 @@ func knownKeys() []string {
 		"hotspot_ssid", "listen", "connect", "always_awake", "lid_mode",
 		"cmux_status", "screen_off_after", "idle_sleep_after",
 		"night_ask_at", "night_until", "battery_floor",
+		"prime_at", "prime_agents", "prime_message", "prime_model", "prime_model_codex",
 	}
 }
 
@@ -335,6 +349,22 @@ func (c Config) BatteryFloorEffective(loaded Loaded) int {
 	return 25
 }
 
+// PrimeSettings returns primer config with defaults applied.
+func (c Config) PrimeSettings() (at, agents []string, message, model, modelCodex string) {
+	at = c.PrimeAt
+	agents = c.PrimeAgents
+	message = c.PrimeMessage
+	if message == "" {
+		message = "hi"
+	}
+	model = c.PrimeModel
+	if model == "" {
+		model = "claude-haiku-4-5"
+	}
+	modelCodex = c.PrimeModelCodex
+	return
+}
+
 // LoadState reads state.json.
 func LoadState() (State, error) {
 	p := statePath()
@@ -391,6 +421,24 @@ func SaveLidMode(lidMode bool) error {
 		st = State{}
 	}
 	st.LidMode = lidMode
+	return SaveState(st)
+}
+
+// SavePrimeLast merges primer run results into state.json.
+func SavePrimeLast(updates map[string]PrimeLastEntry) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	st, err := LoadState()
+	if err != nil {
+		st = State{}
+	}
+	if st.PrimeLast == nil {
+		st.PrimeLast = map[string]PrimeLastEntry{}
+	}
+	for k, v := range updates {
+		st.PrimeLast[k] = v
+	}
 	return SaveState(st)
 }
 
