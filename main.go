@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -40,6 +41,7 @@ import (
 	"github.com/elijah/keepgoing/internal/netwatch"
 	"github.com/elijah/keepgoing/internal/night"
 	"github.com/elijah/keepgoing/internal/power"
+	"github.com/elijah/keepgoing/internal/prime"
 	"github.com/elijah/keepgoing/internal/procwatch"
 	"github.com/elijah/keepgoing/internal/proxy"
 	"github.com/elijah/keepgoing/internal/runner"
@@ -143,6 +145,8 @@ func main() {
 		os.Exit(cmdNight(fs.Args(), saved, base))
 	case "battery":
 		os.Exit(cmdBattery(fs.Args(), saved))
+	case "prime":
+		os.Exit(cmdPrime(fs.Args(), saved, base))
 	case "app":
 		os.Exit(cmdApp(fs.Args()))
 	case "run":
@@ -190,6 +194,7 @@ func usage() {
   keepgoing screen off-after <seconds|0> | status   turn display off after idle while agents run
   keepgoing night status|yes|no|ask-at HH:MM|off   overnight prompt and sleep default
   keepgoing battery floor <pct|0>                 release sleep inhibit below this level on battery
+  keepgoing prime status|at HH:MM[,HH:MM]|agents claude,codex|off|now [--dry-run]   anchor 5-hour session windows
   keepgoing app login on|off|status   menu bar app at login (launchd KeepAlive)
   keepgoing daemon [flags]          foreground daemon (what install runs)
   keepgoing env [-agent claude|codex]   exports to route an agent through the holding proxy
@@ -291,6 +296,15 @@ func cmdDaemon(c cfg, saved config.Config) int {
 	batteryFloor := saved.BatteryFloorEffective(loaded)
 	var batteryGuard bool
 	var batteryNotified bool
+	primeCfg := prime.SettingsFromConfig(saved)
+	primeLast := map[string]prime.PrimeLast{}
+	if len(st.PrimeLast) > 0 {
+		for k, v := range st.PrimeLast {
+			primeLast[k] = prime.PrimeLast{TS: v.TS, OK: v.OK, Slot: v.Slot}
+		}
+	}
+	var primeMu sync.Mutex
+	var primeRunning bool
 	ctx, cancel := signalCtx()
 	defer cancel()
 	co, err := startCore(ctx, c)
@@ -433,6 +447,29 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		m["battery_floor"] = batteryFloor
 		if pct, ok := power.BatteryPercent(); ok {
 			m["battery_pct"] = pct
+		}
+		primeMu.Lock()
+		pcfg := primeCfg
+		plast := primeLast
+		primeMu.Unlock()
+		if len(pcfg.At) > 0 {
+			m["prime_at"] = pcfg.At
+		}
+		if len(pcfg.Agents) > 0 {
+			m["prime_agents"] = pcfg.Agents
+		}
+		if len(plast) > 0 {
+			out := map[string]any{}
+			for k, v := range plast {
+				out[k] = map[string]any{
+					"ts": time.Unix(v.TS, 0).Format(time.RFC3339),
+					"ok": v.OK,
+				}
+			}
+			m["prime_last"] = out
+		}
+		if next := prime.NextAt(time.Now(), pcfg); !next.IsZero() {
+			m["prime_next_at"] = next.Format(time.RFC3339)
 		}
 		if _, _, cpuC := co.px.ThermalSnapshot(); cpuC != nil {
 			m["cpu_c"] = *cpuC
@@ -720,6 +757,43 @@ func cmdDaemon(c cfg, saved config.Config) int {
 		}
 		if !thermalLogged && (lastLogAt.IsZero() || time.Since(lastLogAt) >= 30*time.Second) {
 			appendThermalLog()
+		}
+		primeMu.Lock()
+		running := primeRunning
+		lastRun := prime.LastRunFromPrimeLast(primeLast, primeCfg)
+		due := prime.Items(now, primeCfg, lastRun)
+		primeMu.Unlock()
+		if !running && len(due) > 0 {
+			primeMu.Lock()
+			primeRunning = true
+			primeMu.Unlock()
+			go func(tickNow time.Time) {
+				defer func() {
+					primeMu.Lock()
+					primeRunning = false
+					primeMu.Unlock()
+				}()
+				primeMu.Lock()
+				lr := prime.LastRunFromPrimeLast(primeLast, primeCfg)
+				primeMu.Unlock()
+				results, updates := prime.RunDue(ctx, tickNow, primeCfg, lr, co.nw)
+				if len(updates) == 0 {
+					return
+				}
+				entries := map[string]config.PrimeLastEntry{}
+				primeMu.Lock()
+				for agent, v := range updates {
+					primeLast[agent] = v
+					entries[agent] = config.PrimeLastEntry{TS: v.TS, OK: v.OK, Slot: v.Slot}
+				}
+				primeMu.Unlock()
+				_ = config.SavePrimeLast(entries)
+				for _, res := range results {
+					if !res.OK {
+						prime.NotifyFailure(res.Slot, res.Note)
+					}
+				}
+			}(now)
 		}
 		select {
 		case <-ctx.Done():
@@ -1075,6 +1149,215 @@ func parseClockTime(s string) (hour, min int, err error) {
 		return 0, 0, fmt.Errorf("bad minute")
 	}
 	return hour, min, nil
+}
+
+// ---- prime -----------------------------------------------------------------
+
+func cmdPrime(args []string, saved config.Config, base string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: keepgoing prime status|at HH:MM[,HH:MM]|agents claude,codex|off|now [--dry-run]")
+		return 2
+	}
+	cfg := prime.SettingsFromConfig(saved)
+	switch args[0] {
+	case "status":
+		if resp, err := http.Get(base + "/_status"); err == nil {
+			defer resp.Body.Close()
+			var m map[string]any
+			if json.NewDecoder(resp.Body).Decode(&m) == nil {
+				printPrimeStatus(m, cfg)
+				return 0
+			}
+		}
+		st, _ := config.LoadState()
+		last := map[string]prime.PrimeLast{}
+		for k, v := range st.PrimeLast {
+			last[k] = prime.PrimeLast{TS: v.TS, OK: v.OK, Slot: v.Slot}
+		}
+		printPrimeStatusOffline(cfg, last)
+		if n := prime.NextAt(time.Now(), cfg); !n.IsZero() {
+			fmt.Printf("next: %s\n", n.Format(time.RFC3339))
+		}
+		return 0
+	case "at":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: keepgoing prime at 07:00[,13:00]")
+			return 2
+		}
+		var times []string
+		for _, part := range strings.Split(args[1], ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if _, _, err := parseClockTime(part); err != nil {
+				fmt.Fprintln(os.Stderr, "time must be HH:MM:", part)
+				return 2
+			}
+			times = append(times, part)
+		}
+		if len(times) == 0 {
+			fmt.Fprintln(os.Stderr, "usage: keepgoing prime at 07:00[,13:00]")
+			return 2
+		}
+		if err := config.Update(func(c *config.Config) error {
+			c.PrimeAt = times
+			if len(c.PrimeAgents) == 0 {
+				c.PrimeAgents = []string{"claude", "codex"}
+			}
+			return nil
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		fmt.Printf("session window at %s\n", strings.Join(times, ", "))
+		return 0
+	case "agents":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: keepgoing prime agents claude,codex")
+			return 2
+		}
+		var agents []string
+		for _, part := range strings.Split(args[1], ",") {
+			part = strings.TrimSpace(strings.ToLower(part))
+			if part == "" {
+				continue
+			}
+			if part != "claude" && part != "codex" {
+				fmt.Fprintln(os.Stderr, "agents must be claude and/or codex")
+				return 2
+			}
+			agents = append(agents, part)
+		}
+		if len(agents) == 0 {
+			fmt.Fprintln(os.Stderr, "usage: keepgoing prime agents claude,codex")
+			return 2
+		}
+		if err := config.Update(func(c *config.Config) error {
+			c.PrimeAgents = agents
+			return nil
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		fmt.Printf("session window agents: %s\n", strings.Join(agents, ", "))
+		return 0
+	case "off":
+		if err := config.Update(func(c *config.Config) error {
+			c.PrimeAt = nil
+			c.PrimeAgents = nil
+			return nil
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		kickDaemon()
+		fmt.Println("session window off")
+		return 0
+	case "now":
+		dryRun := false
+		for _, a := range args[1:] {
+			if a == "--dry-run" {
+				dryRun = true
+			}
+		}
+		runCfg := cfg
+		if len(runCfg.Agents) == 0 {
+			runCfg.Agents = []string{"claude", "codex"}
+		}
+		for _, agent := range runCfg.Agents {
+			cmd := prime.Command(agent, runCfg)
+			if cmd == "" {
+				fmt.Fprintf(os.Stderr, "unknown agent %q\n", agent)
+				return 2
+			}
+			fmt.Printf("/bin/zsh -lc %s\n", cmd)
+		}
+		if dryRun {
+			return 0
+		}
+		fmt.Fprintln(os.Stderr, "refusing to run without --dry-run (costs a request)")
+		return 2
+	}
+	fmt.Fprintln(os.Stderr, "unknown prime subcommand:", args[0])
+	return 2
+}
+
+func printPrimeStatus(m map[string]any, cfg prime.Settings) {
+	if at, ok := m["prime_at"].([]any); ok {
+		cfg.At = stringifyAnySlice(at)
+	}
+	if agents, ok := m["prime_agents"].([]any); ok {
+		cfg.Agents = stringifyAnySlice(agents)
+	}
+	printPrimeStatusOffline(cfg, primeLastFromStatus(m))
+	if next, ok := m["prime_next_at"].(string); ok && next != "" {
+		fmt.Printf("next: %s\n", next)
+	} else if n := prime.NextAt(time.Now(), cfg); !n.IsZero() {
+		fmt.Printf("next: %s\n", n.Format(time.RFC3339))
+	}
+}
+
+func printPrimeStatusOffline(cfg prime.Settings, last map[string]prime.PrimeLast) {
+	if len(cfg.At) == 0 {
+		fmt.Println("session window: off")
+	} else {
+		fmt.Printf("scheduled: %s\n", strings.Join(cfg.At, ", "))
+	}
+	if len(cfg.Agents) > 0 {
+		fmt.Printf("agents: %s\n", strings.Join(cfg.Agents, ", "))
+	}
+	rows, err := prime.ReadCSVTail(7)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "prime log: %v\n", err)
+	}
+	if len(rows) > 0 {
+		fmt.Println("last runs:")
+		fmt.Printf("%-26s %-8s %-4s %-8s %-5s %s\n", "time", "agent", "ok", "seconds", "exit", "note")
+		for _, row := range rows {
+			for len(row) < 6 {
+				row = append(row, "")
+			}
+			ok := row[2]
+			if ok == "1" {
+				ok = "yes"
+			} else if ok == "0" {
+				ok = "no"
+			}
+			fmt.Printf("%-26s %-8s %-4s %-8s %-5s %s\n", row[0], row[1], ok, row[3], row[4], row[5])
+		}
+	}
+}
+
+func primeLastFromStatus(m map[string]any) map[string]prime.PrimeLast {
+	raw, ok := m["prime_last"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := map[string]prime.PrimeLast{}
+	for k, v := range raw {
+		ent, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		tsStr, _ := ent["ts"].(string)
+		ts, _ := time.Parse(time.RFC3339, tsStr)
+		okVal, _ := ent["ok"].(bool)
+		out[k] = prime.PrimeLast{TS: ts.Unix(), OK: okVal}
+	}
+	return out
+}
+
+func stringifyAnySlice(v []any) []string {
+	out := make([]string, 0, len(v))
+	for _, x := range v {
+		if s, ok := x.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // ---- battery ---------------------------------------------------------------

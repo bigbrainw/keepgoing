@@ -123,6 +123,9 @@ struct Status {
     var nightAnswer = ""
     var nightUntilAt = ""
     var nightAskAt = ""
+    var primeAt: [String] = []
+    var primeNextAt = ""
+    var primeLastOK: String = ""
     var reachable = false
 }
 
@@ -144,6 +147,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
     var renderedHotspot = ""
     var renderedThermal = ""
     var renderedNight = ""
+    var renderedWindow = ""
     var renderedOvernight = false
     var renderedAlways = false
     var renderedScreenOff = false
@@ -165,6 +169,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
     let hotspotItem = NSMenuItem()
     let thermalItem = NSMenuItem()
     let nightItem = NSMenuItem()
+    let windowItem = NSMenuItem()
     let nightYesItem = NSMenuItem(title: "Keep running overnight", action: #selector(nightAnswerYes), keyEquivalent: "")
     let nightNoItem = NSMenuItem(title: "Let it sleep tonight", action: #selector(nightAnswerNo), keyEquivalent: "")
     let overnightItem = NSMenuItem(title: "Run overnight tonight", action: #selector(toggleOvernight), keyEquivalent: "")
@@ -202,7 +207,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
         versionItem.isEnabled = false
         menu.addItem(versionItem)
         menu.addItem(.separator())
-        for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem] {
+        for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem, windowItem] {
             it.isEnabled = false
             menu.addItem(it)
         }
@@ -280,6 +285,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
                 }
                 s.nightUntilAt = j["night_until_at"] as? String ?? ""
                 s.nightAskAt = j["night_ask_at"] as? String ?? ""
+                if let at = j["prime_at"] as? [String] {
+                    s.primeAt = at
+                } else if let atAny = j["prime_at"] as? [Any] {
+                    s.primeAt = atAny.compactMap { $0 as? String }
+                }
+                s.primeNextAt = j["prime_next_at"] as? String ?? ""
+                if let pl = j["prime_last"] as? [String: Any] {
+                    s.primeLastOK = latestPrimeTime(pl)
+                }
                 if let wr = j["wifi_request"] as? [String: Any] {
                     self.wifi.handleRequest(wr, cli: self.cli)
                 }
@@ -321,7 +335,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
         if up {
             let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
             setTitle(versionItem, to: "KeepGoing \(ver)", store: &renderedVersion)
-            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem] { it.isHidden = false }
+            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem, windowItem] { it.isHidden = false }
             nightItem.isHidden = nightMenuFallback || s.nightMode == "off"
             setTitle(agentsItem, to: "Agents: \(formatAgents(s.agents))", store: &renderedAgents)
             setTitle(sleepItem, to: s.awake ? "Sleep: blocked" : "Sleep: allowed — no agents", store: &renderedSleep)
@@ -330,6 +344,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
             setTitle(hotspotItem, to: s.hotspot.isEmpty ? "Hotspot: not set" : "Hotspot: \(s.hotspot)", store: &renderedHotspot)
             setTitle(thermalItem, to: formatThermal(s), store: &renderedThermal)
             setTitle(nightItem, to: nightStatusLine(s), store: &renderedNight)
+            setTitle(windowItem, to: windowStatusLine(s), store: &renderedWindow)
             checkThermalNotify(s.thermal)
             setCheck(lidToggleItem, s.lidMode, store: &renderedLidToggle)
             setCheck(alwaysItem, s.always, store: &renderedAlways)
@@ -338,7 +353,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
             setCheck(overnightItem, s.nightAnswer == "yes", store: &renderedOvernight)
         } else {
             setTitle(versionItem, to: "Daemon not running", store: &renderedVersion)
-            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem] { it.isHidden = true }
+            for it in [agentsItem, sleepItem, lidItem, netItem, hotspotItem, thermalItem, nightItem, windowItem] { it.isHidden = true }
         }
 
         let loginOn = appLoginEnabled()
@@ -484,6 +499,45 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
             return String(format: "%d:00", h)
         }
         return String(format: "%d:%02d", h, m)
+    }
+
+    func latestPrimeTime(_ pl: [String: Any]) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let today = Calendar.current.startOfDay(for: Date())
+        var best: Date?
+        for (_, v) in pl {
+            guard let ent = v as? [String: Any], ent["ok"] as? Bool == true,
+                  let ts = ent["ts"] as? String else { continue }
+            var d = f.date(from: ts)
+            if d == nil {
+                f.formatOptions = [.withInternetDateTime]
+                d = f.date(from: ts)
+                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            }
+            guard let dt = d, dt >= today else { continue }
+            if best == nil || dt > best! { best = dt }
+        }
+        guard let b = best else { return "" }
+        let cal = Calendar.current
+        return String(format: "%d:%02d", cal.component(.hour, from: b), cal.component(.minute, from: b))
+    }
+
+    func windowStatusLine(_ s: Status) -> String {
+        if s.primeAt.isEmpty {
+            return "Window: not scheduled"
+        }
+        let next = formatUntilClock(s.primeNextAt) ?? ""
+        if !s.primeLastOK.isEmpty {
+            if next.isEmpty {
+                return "Window: primed \(s.primeLastOK)"
+            }
+            return "Window: primed \(s.primeLastOK) · next \(next)"
+        }
+        if next.isEmpty {
+            return "Window: not scheduled"
+        }
+        return "Window: next \(next)"
     }
 
     func registerNightCategory() {

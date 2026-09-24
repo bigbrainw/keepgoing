@@ -276,11 +276,25 @@ func ReadCSVTail(n int) ([][]string, error) {
 
 // NotifyFailure posts a user notification for a failed scheduled primer.
 func NotifyFailure(slot, reason string) {
-	slotLabel := slot
+	slotLabel := formatSlotNotify(slot)
 	if slotLabel == "" {
 		slotLabel = "scheduled"
+	}
+	if reason == "" {
+		reason = "unknown error"
 	}
 	msg := fmt.Sprintf("Couldn't start your %s session window: %s", slotLabel, reason)
 	script := fmt.Sprintf(`display notification %q with title "KeepGoing"`, msg)
 	_ = exec.Command("osascript", "-e", script).Run()
+}
+
+func formatSlotNotify(slot string) string {
+	if slot == "now" || slot == "" {
+		return slot
+	}
+	h, m, err := parseClock(slot)
+	if err != nil {
+		return slot
+	}
+	return fmt.Sprintf("%d:%02d", h, m)
 }
