@@ -55,6 +55,7 @@ keepgoing status
 | Screen | While agents run and you haven't touched the Mac for 2 min, the display sleeps (`pmset displaysleepnow`). The system stays awake. Off by default; menu → Turn off screen when idle. |
 | Heat | With lid mode on, closing the lid turns on Low Power Mode and moves agents to efficiency cores; both restore when the lid opens. Thermal state shown in the menu; notification at serious. |
 | Overnight | At 23:00 KeepGoing asks whether to stay awake; no answer means sleep. Battery below 25% also releases everything. |
+| Session window | Sends one small message (Haiku, ~2 tokens) at the times you choose so your 5-hour usage window starts when you want. Off by default; `keepgoing prime at 07:00`. |
 | Wi-Fi | Probes `api.anthropic.com`, `api.openai.com`, `chatgpt.com` every 3s. Offline ≥ 20s → bounce Wi-Fi radio once. t+30–120s → wait for macOS Instant Hotspot (Wi-Fi → Ask to join hotspots → Automatically). t+120s → menu bar app joins via CoreWLAN (Location permission); falls back to `networksetup` with real error detection. Repeats at t+240s and every 4 min; radio bounce only every 10 min. `keepgoing wifi test` checks visibility without disconnecting. |
 | Tokens (optional) | Holding proxy on `127.0.0.1:7777` (HTTP) and `:7778` (CONNECT). Export the env below and requests are *parked* while offline instead of failing → no SDK retries, no re-sent context. |
 
@@ -86,6 +87,20 @@ sudo rm /etc/sudoers.d/keepgoing
 
 **Heat and battery:** a closed laptop under agent load gets warm. Keep it on a hard surface, not in a bag, and prefer plugged in. On battery alone, macOS may still throttle; lid mode overrides clamshell sleep, not thermals.
 
+## Session window
+
+Claude Code and Codex meter usage in rolling 5-hour windows that start at your first message. `keepgoing prime at 07:00` sends one tiny message (Haiku, ~2 tokens) at the times you choose so the window starts when you want — for example 07:00–12:00, then 12:00–17:00.
+
+It costs one small request per agent per scheduled time; it is not free. It does not extend your limits — it only anchors when the window starts. If you already sent a message to that agent earlier in the day, the window already started and priming won't move it.
+
+```
+keepgoing prime at 07:00[,12:00]     schedule times
+keepgoing prime agents claude,codex   which agents to ping
+keepgoing prime status                last runs and next time
+keepgoing prime off                   disable
+keepgoing prime now --dry-run         preview commands (does not run)
+```
+
 ## Commands
 
 ```
@@ -100,6 +115,7 @@ keepgoing hooks install|uninstall|status   opt-in Claude/Codex working-idle hook
 keepgoing screen off-after <seconds|0>   turn display off after idle while agents run
 keepgoing night status|yes|no|ask-at HH:MM|off   overnight prompt (default ask at 23:00)
 keepgoing battery floor <pct|0>            release sleep inhibit below this level on battery
+keepgoing prime status|at HH:MM[,HH:MM]|agents claude,codex|off|now [--dry-run]
 keepgoing daemon [flags]               foreground; -always -idle-grace 5m -no-wifi -wifi-dry-run -no-awake
 keepgoing run [flags] -- <agent cmd>   optional wrapper: proxy + awake + resume-on-crash for one headless agent
 keepgoing env [-agent claude|codex]
