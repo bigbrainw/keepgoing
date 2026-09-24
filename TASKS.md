@@ -64,3 +64,34 @@ Status group gains one line: `Overnight: on until 7:00` / `off tonight` / `asks 
 README: new row "Overnight — at 23:00 KeepGoing asks whether to stay awake; no answer means sleep. Battery below 25% also releases everything." Site FAQ "Battery?" answer updated in one clause. Keep the word budget.
 
 ### 7. Build, `go test -ldflags=-linkmode=external ./...`, deploy, verify. Test the decision logic with the fake clock (don't wait for 23:00). Report `keepgoing night status` and `keepgoing status | grep night`.
+
+## Phase 14 — session-window primer (Elijah 2026-09-23)
+"I want to send 'hi' at 7 or 8 am so my 5-hour session window starts when I want."
+
+Both Claude Code and Codex meter usage in rolling windows that start at your **first message**. Sending one tiny message at a chosen time anchors the window (07:00–12:00, then 12:00–17:00 …) instead of it starting whenever you happen to open a session. Cost is not zero — it is one small request (Haiku, two tokens) — say so in the UI; never claim "free".
+
+### Hard rules
+Unchanged (no sudo/pmset -a, `./app/build.sh`, bundle binary `keepgoing-cli`, deploy then `keepgoing lid status` → `lid_mode=true`, strings per `~/.cursor/skills/native-mac-polish/SKILL.md`, commit+push per task, no history rewriting). **Never run a primer while testing** except the one explicit dry-run below — each real run costs Elijah a request and can anchor his window at the wrong time.
+
+### 1. `internal/prime` (pure)
+`Settings{At []string, Agents []string, Message string, Model string}`; `Due(now time.Time, cfg, lastRun map[string]time.Time) []string` returns which agents are due, at most once per scheduled time per day, with a 30-minute catch-up window (Mac asleep at 07:00 → runs at 07:20 when it wakes, not at 13:00). Unit-tested with a fake clock: before time, at time, 20 min late, 40 min late (skip), already ran today, multiple times per day, agent list empty.
+
+### 2. Runner (Go)
+For each due agent, with a 90 s timeout, capture exit code + first line of output:
+- claude: `claude -p "<message>" --model <model> --output-format text` (default message `hi`, default model `claude-haiku-4-5`)
+- codex: `codex exec --skip-git-repo-check "<message>"` (add `-m` only if `prime_model_codex` is set; default unset so Codex uses its own default)
+Run in the user's login shell environment so PATH/auth resolve (`/bin/zsh -lc`). Working directory `~`. Never run two at once; 5 s apart.
+Offline → wait for the netwatch to report online, up to 30 min from the scheduled time, then give up for the day and log it.
+Append to `~/Library/Logs/keepgoing/prime.csv`: `ts_iso,agent,ok,seconds,exit_code,note`. Log `[prime] claude ok in 3.2s` / `[prime] codex failed: <first line>`.
+
+### 3. Status, CLI, menu
+`/_status`: `prime_at`, `prime_agents`, `prime_last` (per agent: ts + ok), `prime_next_at`.
+CLI: `keepgoing prime status` (table of the last 7 runs + next scheduled), `keepgoing prime at 07:00[,13:00]`, `keepgoing prime agents claude,codex`, `keepgoing prime off`, `keepgoing prime now [--dry-run]` — `--dry-run` prints the exact commands and runs nothing.
+Menu status group: one line `Window: primed 07:02 · next 12:00` (or `Window: not scheduled`). No new checkbox — the CLI and the config are enough.
+Notification **only on failure**: title `KeepGoing`, body `Couldn't start your 7:00 session window: <reason>`.
+
+### 4. Docs
+README: new row in the daemon table — "Session window — sends one small message (Haiku, ~2 tokens) at the times you choose so your 5-hour usage window starts when you want. Off by default; `keepgoing prime at 07:00`." Add a short section under "Close the lid" explaining what it does and does not do (it costs one request; it does not extend limits; it only anchors the window; if you already used the agent earlier that day the window already started).
+Site: no change.
+
+### 5. Build, `go test -ldflags=-linkmode=external ./...`, deploy, verify. Show `keepgoing prime now --dry-run` output and `keepgoing prime status` in the report. **Do not run a real primer** — Elijah will.
