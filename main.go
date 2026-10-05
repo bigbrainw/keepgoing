@@ -102,6 +102,10 @@ func main() {
 	fs.DurationVar(&c.idleGrace, "idle-grace", 5*time.Minute, "daemon: keep awake this long after last agent exits")
 	fs.BoolVar(&c.wifiDry, "wifi-dry-run", false, "daemon: log wifi actions instead of doing them")
 	fs.BoolVar(&c.noWifi, "no-wifi", false, "daemon: disable wifi recovery")
+	var daemonOnly bool
+	if sub == "install" {
+		fs.BoolVar(&daemonOnly, "daemon-only", false, "install only the daemon; preserve the menu bar app and its login setting")
+	}
 
 	var cmd []string
 	for i, a := range rest {
@@ -119,7 +123,7 @@ func main() {
 	case "daemon":
 		os.Exit(cmdDaemon(c, saved))
 	case "install":
-		os.Exit(cmdInstall())
+		os.Exit(cmdInstall(daemonOnly))
 	case "uninstall":
 		os.Exit(cmdUninstall())
 	case "status":
@@ -182,6 +186,7 @@ func usage() {
 	fmt.Fprint(os.Stderr, `keepgoing — keep the Mac awake + online while your coding agents run
 
   keepgoing install                 run at login via launchd (awake + wifi + proxy)
+  keepgoing install --daemon-only   install daemon without changing the menu bar app or its login setting
   keepgoing uninstall
   keepgoing status                  agents, awake, network, wifi, proxy stats
   keepgoing version                 print release version
@@ -1650,7 +1655,21 @@ func cmdApp(args []string) int {
 	return 2
 }
 
-func cmdInstall() int {
+func cmdInstall(daemonOnly bool) int {
+	return installAgents(daemonOnly, installDaemonAgent, keepGoingAppBin, installAppAgent)
+}
+
+func installAgents(daemonOnly bool, installDaemon func() int, findApp func() string, installApp func() int) int {
+	if code := installDaemon(); code != 0 {
+		return code
+	}
+	if !daemonOnly && findApp() != "" {
+		return installApp()
+	}
+	return 0
+}
+
+func installDaemonAgent() int {
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -1688,11 +1707,6 @@ func cmdInstall() int {
 		return 1
 	}
 	fmt.Printf("installed %s\n  binary: %s\n  log:    %s/daemon.log\n  check:  keepgoing status\n", label, exe, logDir)
-	if keepGoingAppBin() != "" {
-		if code := installAppAgent(); code != 0 {
-			return code
-		}
-	}
 	return 0
 }
 

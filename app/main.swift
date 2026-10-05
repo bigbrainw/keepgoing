@@ -707,15 +707,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifica
     func ensureDaemon() {
         let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(daemonLabel)"])
         if code != 0 {
-            appLog("daemon missing — running keepgoing install")
-            run([cli, "install"])
+            appLog("daemon missing — running keepgoing install --daemon-only")
+            run([cli, "install", "--daemon-only"])
         }
     }
 
     @objc func startDaemon() {
         let (code, _) = run(["/bin/launchctl", "print", "gui/\(getuid())/\(daemonLabel)"])
         if code != 0 {
-            run([cli, "install"])
+            run([cli, "install", "--daemon-only"])
         } else {
             run(["/bin/launchctl", "kickstart", "-k", "gui/\(getuid())/\(daemonLabel)"])
         }

@@ -37,11 +37,12 @@ Menu: agents, sleep, lid, network, hotspot, and thermal status; **Keep awake wit
 cp -R dist/KeepGoing.app ~/Applications/ && open ~/Applications/KeepGoing.app
 ```
 
-First launch installs the launchd daemon from the bundled `keepgoing-cli` if it isn't registered.
+First launch installs the launchd daemon from the bundled `keepgoing-cli` if it isn't registered. The app uses `install --daemon-only` for daemon recovery, preserving the running menu bar app and its open-at-login setting.
 CLI-only use works too:
 
 ```
-keepgoing install            # launchd: runs at login, restarts if it dies
+keepgoing install            # daemon + menu bar app at login, when the app is available
+keepgoing install --daemon-only  # daemon only; preserve menu bar app and login setting
 keepgoing hotspot set MyiPhone   # optional: auto-join hotspot when Wi-Fi is gone
 keepgoing status
 ```
